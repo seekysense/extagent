@@ -1,6 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+function CopyCodeButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button
+      className="absolute top-1 right-1 btn btn-xs btn-ghost opacity-0 group-hover:opacity-100 transition-opacity"
+      onClick={handleCopy}
+      title="Copia"
+    >
+      {copied ? '✓' : '⎘'}
+    </button>
+  );
+}
 
 interface LlmContentProps {
   content: string;
@@ -79,9 +97,18 @@ export const LlmContent: React.FC<LlmContentProps> = ({ content }) => {
                 code: ({node, className, children, ...props}) => {
                   const match = /language-(\w+)/.exec(className || '');
                   const isInline = !match && !className;
-                  return isInline 
-                    ? <code className="bg-base-300 px-1 rounded text-sm" {...props}>{children}</code>
-                    : <pre className="bg-base-300 p-2 rounded text-sm overflow-auto my-2"><code {...props}>{children}</code></pre>;
+                  if (isInline) {
+                    return <code className="bg-base-300 px-1 rounded text-sm" {...props}>{children}</code>;
+                  }
+                  const text = String(children ?? '').replace(/\n$/, '');
+                  return (
+                    <div className="relative my-2 group">
+                      <pre className="bg-base-300 p-2 pr-8 rounded text-sm overflow-auto">
+                        <code {...props}>{children}</code>
+                      </pre>
+                      <CopyCodeButton text={text} />
+                    </div>
+                  );
                 },
                 blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-base-300 pl-4 italic my-2" {...props} />,
                 table: ({node, ...props}) => <table className="border-collapse table-auto w-full my-2" {...props} />,

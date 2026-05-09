@@ -49,6 +49,24 @@ export class ErrorHandler {
   isRetryableError(error: any): boolean {
     return this.isRateLimitError(error) || this.isOverloadedError(error);
   }
+
+  isContextOverflowError(error: any): boolean {
+    const msg = (error?.message ?? '').toLowerCase();
+    const status = error?.status ?? error?.statusCode ?? 0;
+    if (status === 413 || status === 422) return true;
+    if (status === 500 && (
+      msg.includes('context_length') || msg.includes('too many tokens') ||
+      msg.includes('maximum context') || msg.includes('request too large') ||
+      msg.includes('token limit')
+    )) return true;
+    return false;
+  }
+
+  isCdpDisconnectedError(error: any): boolean {
+    const msg = (error?.message ?? '').toLowerCase();
+    return msg.includes('cdp session closed') || msg.includes('target closed') ||
+      msg.includes('session closed') || msg.includes('frame has been detached');
+  }
   
   /**
    * Format an error message for display

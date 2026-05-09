@@ -1,11 +1,10 @@
-# BrowserBee 🐝
+# ExtAgent
 *Your in-browser AI assistant. Control the web with natural language.*
 
->**Important update (22/10/2025):** I (Parsa) have stopped working on BrowserBee, so please proceed with caution. If you're curious, here's why I stopped: I built BrowserBee back in May to explore the effectiveness of an LLM-powered agent embedded directly within the browser with broad access to tools for observing and manipulating web pages. Since then, several "AI browsers" and browser extensions have come out: [Comet](https://www.perplexity.ai/comet) by Perplexity, [Atlas](https://openai.com/index/introducing-chatgpt-atlas/) by OpenAI, [Claude for Chrome](https://www.anthropic.com/news/claude-for-chrome) by Anthropic (which I must admit looks supsciously similar to BrowserBee!), and many smaller ones, and of course Gemini in Chrome. Some like [Dia](https://www.diabrowser.com/) by The Browser Company even got acquired for large sums. The main reason I stopped working on BrowserBee, however, is something else: it became clear to me that the tech, i.e. the current generation of LLMs interacting with web pages, just isn't there yet. The information density of a web page with standard representations (DOM, screenshot, etc) is an order of magnitude lower than that of, say, a document or piece of code, which is where LLMs shine. So we either need much better web page representations, or much more capable models, for this to work reliably. Having LLMs book flights by interacting with the DOM is sort of like having them code a web app using assembly. Given the sheer volume of investment going into this we should expect decent progress here over the coming months and years.
 
-BrowserBee is a privacy-first open source Chrome extension that lets you control your browser using natural language. It combines the power of an LLM for instruction parsing & planning, and Playwright for robust browser automation to accomplish tasks.
+ExtAgent is a privacy-first open source Chrome extension that lets you control your browser using natural language. It combines the power of an LLM for instruction parsing & planning, and Playwright for robust browser automation to accomplish tasks.
 
-Since BrowserBee runs entirely within your browser (with the exception of the LLM), it can safely interact with logged-in websites, like your social media accounts or email, without compromising security or requiring backend infrastructure. This makes it more convenient for personal use than other "browser use" type products out there.
+Since ExtAgent runs entirely within your browser (with the exception of the LLM), it can safely interact with logged-in websites, like your social media accounts or email, without compromising security or requiring backend infrastructure. This makes it more convenient for personal use than other "browser use" type products out there.
 
 ## 🎲 Features 
 
@@ -151,21 +150,21 @@ Since BrowserBee runs entirely within your browser (with the exception of the LL
 
 ## 🛫 Roadmap
 
-Please refer to [ROADMAP.md](ROADMAP.md) for an up to date list of features we're aiming to add to BrowserBee. 
+Please refer to [ROADMAP.md](ROADMAP.md) for an up to date list of features we're aiming to add to ExtAgent. 
 
 - Support for saving and replaying sessions (macros)
 - Ability to memorize key information as needed (in your local Chrome instance using [IndexedDB](https://developer.chrome.com/docs/devtools/storage/indexeddb))
 - Scheduled task execution (e.g. check news and social media every morning)
 
-If you're interested in contributing to build any of these features or to improve BrowserBee in any way, please head over to [CONTRIBUTING.md](CONTRIBUTING.md). For information about our testing infrastructure and CI/CD pipeline, see [.github/WORKFLOWS.md](.github/WORKFLOWS.md).
+If you're interested in contributing to build any of these features or to improve ExtAgent in any way, please head over to [CONTRIBUTING.md](CONTRIBUTING.md). For information about our testing infrastructure and CI/CD pipeline, see [.github/WORKFLOWS.md](.github/WORKFLOWS.md).
 
 ## ▶️ Installation
 
-You have three options to install BrowserBee:
+You have three options to install ExtAgent:
 
 ### Option 1: Download the latest release (Recommended)
 
-1. Download the latest release from [GitHub Releases](https://github.com/parsaghaffari/browserbee/releases/tag/v0.2.0-beta)
+1. Download the latest release from [GitHub Releases](https://github.com/parsaghaffari/ExtAgent/releases/tag/v0.2.0-beta)
 2. Unzip the downloaded file
 3. Load the extension in Chrome:
    - Go to `chrome://extensions/`
@@ -186,30 +185,30 @@ You have three options to install BrowserBee:
 
 ### Option 3: Chrome Web Store
 
-BrowserBee is now available on [Chrome Web Store](https://chromewebstore.google.com/detail/browserbee-%F0%9F%90%9D/ilkklnfjpfoibgokaobmjhmdamogjcfj) 🎉
+ExtAgent is now available on [Chrome Web Store](https://chromewebstore.google.com/detail/ExtAgent-%F0%9F%90%9D/ilkklnfjpfoibgokaobmjhmdamogjcfj) 🎉
 
 ## 🏃‍♂️ Usage
 
-1. Click the BrowserBee icon in your Chrome toolbar, or press *Alt+Shift+B*, to open the side panel  
+1. Click the ExtAgent icon in your Chrome toolbar, or press *Alt+Shift+B*, to open the side panel  
 2. Type your instruction (e.g., *"Go to Google, search for Cicero, and click the first result"*)  
-3. Hit Enter and watch BrowserBee go to work 🐝
+3. Hit Enter and watch ExtAgent go to work 🐝
 
 **Note:** 
-1. Since BrowserBee uses Chrome DevTools Protocol (CDP) to attach to tabs, it's best to leave it attached to a base tab that you leave open throughout your session (BrowserBee can open new tabs if needed). If you close the attached tab, use the ![reattach button](<reattach-button.png>) button to reattach to a new tab.
-2. You can have one instance of BrowserBee running per Chrome window and the instances will be working in isolation from one another.
-3. BrowserBee can't attach to tabs without a URL (e.g. a new tab), or with URLs starting with 'chrome://' or 'chrome-extension://'.
+1. Since ExtAgent uses Chrome DevTools Protocol (CDP) to attach to tabs, it's best to leave it attached to a base tab that you leave open throughout your session (ExtAgent can open new tabs if needed). If you close the attached tab, use the ![reattach button](<reattach-button.png>) button to reattach to a new tab.
+2. You can have one instance of ExtAgent running per Chrome window and the instances will be working in isolation from one another.
+3. ExtAgent can't attach to tabs without a URL (e.g. a new tab), or with URLs starting with 'chrome://' or 'chrome-extension://'.
 
 ## 🫂 Community
 
-Join our Discord community to connect with BrowserBee users and developers:
+Join our Discord community to connect with ExtAgent users and developers:
 
 [![Join our Discord](https://img.shields.io/badge/Discord-Join%20Chat-7289da?logo=discord&logoColor=white&style=for-the-badge)](https://discord.gg/RUaq9bfESj)
 
 ## 🫂 Acknowledgements
 
-BrowserBee is built using these amazing open source projects:
+ExtAgent is built using these amazing open source projects:
 
-- [Cline](https://github.com/cline/cline) enabled us to vibe-code the first version of BrowserBee and inspired me to build a "Cline for the web"
+- [Cline](https://github.com/cline/cline) enabled us to vibe-code the first version of ExtAgent and inspired me to build a "Cline for the web"
 - [playwright-crx](https://github.com/ruifigueira/playwright-crx) by [@ruifigueira](https://github.com/ruifigueira) for in-browser use of Playwright
 - [playwright-mcp](https://github.com/microsoft/playwright-mcp) for the browser tool implementations
 - [daisyUI](https://daisyui.com/) 🌼 for the ~~pollen and nectar~~ UI components :)

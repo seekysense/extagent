@@ -1,6 +1,7 @@
 import { faCog, faCircleInfo } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React, { useEffect, useState } from 'react';
+import { useLang } from '../../i18n';
 import { ConfigManager } from '../../background/configManager';
 import { TokenTrackingService } from '../../tracking/tokenTrackingService';
 
@@ -19,6 +20,7 @@ export function ProviderSelector({ isProcessing }: ProviderSelectorProps) {
   const [currentProvider, setCurrentProvider] = useState<string>('');
   const [currentModel, setCurrentModel] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const { t } = useLang();
   
   // Function to load provider options
   const loadOptions = async () => {
@@ -73,15 +75,8 @@ export function ProviderSelector({ isProcessing }: ProviderSelectorProps) {
     };
   }, []);
   
-  const formatProviderName = (provider: string) => {
-    switch (provider) {
-      case 'anthropic': return 'Anthropic';
-      case 'openai': return 'OpenAI';
-      case 'gemini': return 'Google';
-      case 'ollama': return 'Ollama';
-      case 'openai-compatible': return 'OpenAI Compatible';
-      default: return provider;
-    }
+  const formatProviderName = (_provider: string) => {
+    return 'OpenAI Compatible';
   };
   
   const handleChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -134,7 +129,7 @@ export function ProviderSelector({ isProcessing }: ProviderSelectorProps) {
   
   // Function to open help documentation
   const openHelpPage = () => {
-    window.open('https://parsaghaffari.github.io/browserbee/', '_blank');
+    chrome.runtime.openOptionsPage();
   };
 
   return (
@@ -143,7 +138,7 @@ export function ProviderSelector({ isProcessing }: ProviderSelectorProps) {
         <button 
           className="btn btn-ghost btn-xs p-1" 
           onClick={openOptionsPage}
-          title="Open Settings"
+          title={t('action.settings')}
           disabled={isProcessing}
         >
           <FontAwesomeIcon icon={faCog} className="text-gray-500 hover:text-gray-700" />
@@ -169,7 +164,7 @@ export function ProviderSelector({ isProcessing }: ProviderSelectorProps) {
       <button 
         className="btn btn-ghost btn-xs p-1" 
         onClick={openHelpPage}
-        title="Open Help"
+        title={t('action.help')}
         disabled={isProcessing}
       >
         <FontAwesomeIcon icon={faCircleInfo} className="text-gray-500 hover:text-gray-700" />

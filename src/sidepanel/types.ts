@@ -9,6 +9,7 @@ export interface Message {
   isStreaming?: boolean;
   imageData?: string;
   mediaType?: string;
+  structuredResult?: unknown;
 }
 
 // Chrome message types

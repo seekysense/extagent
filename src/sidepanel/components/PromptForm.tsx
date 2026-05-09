@@ -2,6 +2,7 @@ import { faPaperPlane, faXmark } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React, { useState } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
+import { useLang } from '../../i18n';
 
 interface PromptFormProps {
   onSubmit: (prompt: string) => void;
@@ -14,15 +15,16 @@ export const PromptForm: React.FC<PromptFormProps> = ({
   onSubmit,
   onCancel,
   isProcessing,
-  tabStatus
+  tabStatus,
 }) => {
   const [prompt, setPrompt] = useState('');
+  const { t } = useLang();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim() || isProcessing || tabStatus === 'detached') return;
     onSubmit(prompt);
-    setPrompt(''); // Clear the prompt after submission
+    setPrompt('');
   };
 
   return (
@@ -33,44 +35,44 @@ export const PromptForm: React.FC<PromptFormProps> = ({
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {
-            // Check if Enter was pressed without Shift key
             if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault(); // Prevent default behavior (new line)
-              handleSubmit(e); // Submit the form
+              e.preventDefault();
+              handleSubmit(e);
             }
-            // Allow Shift+Enter to create a new line (default behavior)
           }}
-          placeholder={tabStatus === 'detached' 
-            ? "Tab connection lost. Please refresh the tab to continue." 
-            : "Type a message..."}
+          placeholder={
+            tabStatus === 'detached'
+              ? t('sidepanel.placeholderDisconnected')
+              : t('sidepanel.placeholder')
+          }
           autoFocus
           disabled={isProcessing || tabStatus === 'detached'}
           minRows={1}
           maxRows={10}
-          style={{ 
+          style={{
             resize: 'none',
             minHeight: '40px',
             maxHeight: '300px',
-            overflow: 'auto'
+            overflow: 'auto',
           } as any}
         />
         {isProcessing ? (
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={onCancel}
             className="btn btn-sm btn-circle btn-error absolute"
             style={{ bottom: '5px', right: '5px' }}
-            title="Cancel"
+            title={t('action.stop')}
           >
             <FontAwesomeIcon icon={faXmark} />
           </button>
         ) : (
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="btn btn-sm btn-circle btn-primary absolute"
             style={{ bottom: '5px', right: '5px' }}
             disabled={!prompt.trim() || tabStatus === 'detached'}
-            title={tabStatus === 'detached' ? "Refresh tab to continue" : "Execute"}
+            title={tabStatus === 'detached' ? t('action.refreshTab') : t('action.send')}
           >
             <FontAwesomeIcon icon={faPaperPlane} />
           </button>

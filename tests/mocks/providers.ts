@@ -27,6 +27,7 @@ export function createMockProvider(): MockLLMProvider {
         supportsPromptCache: false,
       } as ModelInfo,
     }),
+    getDefaultProfile: jest.fn().mockReturnValue(null),
   };
 }
 

@@ -1,4 +1,3 @@
-import { DynamicTool } from "langchain/tools";
 import type { Page } from "playwright-crx";
 import { createNewTab, getWindowForTab, getCrxAppForTab } from "../../background/tabManager";
 import { setCurrentPage } from "../PageContextManager";
@@ -6,7 +5,7 @@ import { ToolFactory } from "./types";
 import { getCurrentTabId } from "./utils";
 
 export const browserTabList: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_tab_list",
     description: "Return a list of open tabs with their indexes and URLs.",
     func: async () => {
@@ -25,7 +24,7 @@ export const browserTabList: ToolFactory = (page: Page) =>
   });
 
 export const browserTabNew: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_tab_new",
     description:
       "Open a new tab. Optional input = URL to navigate to (otherwise blank tab). Note: This does NOT automatically switch to the new tab. Use browser_tab_select after creating a new tab if you want to interact with it.",
@@ -89,7 +88,7 @@ export const browserTabNew: ToolFactory = (page: Page) =>
   });
 
 export const browserTabSelect: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_tab_select",
     description:
       "Switch focus to a tab by index. Input = integer index from browser_tab_list. IMPORTANT: After switching tabs, you must use browser_get_active_tab to confirm the switch was successful and to get information about the new active tab.",
@@ -156,7 +155,7 @@ export const browserTabSelect: ToolFactory = (page: Page) =>
   });
 
 export const browserTabClose: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_tab_close",
     description:
       "Close a tab. Input = index to close (defaults to current tab if blank).",

@@ -1,10 +1,9 @@
-import { DynamicTool } from "langchain/tools";
 import type { Page } from "playwright-crx";
 import { ToolFactory } from "./types";
 import { withActivePage, getCurrentTabId } from "./utils";
 
 export const browserNavigate: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_navigate",
     description:
       "Navigate the browser to a specific URL. Input must be a full URL, e.g. https://example.com",
@@ -50,7 +49,7 @@ export const browserNavigate: ToolFactory = (page: Page) =>
   });
 
 export const browserWaitForNavigation: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_wait_for_navigation",
     description: 
       "Wait for navigation to complete using specified strategy. Input options (default: all):\n" +
@@ -98,7 +97,7 @@ export const browserWaitForNavigation: ToolFactory = (page: Page) =>
   });
 
 export const browserNavigateBack: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_navigate_back",
     description: "Go back to the previous page (history.back()). No input.",
     func: async () => {
@@ -116,7 +115,7 @@ export const browserNavigateBack: ToolFactory = (page: Page) =>
   });
 
 export const browserNavigateForward: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_navigate_forward",
     description: "Go forward to the next page (history.forward()). No input.",
     func: async () => {

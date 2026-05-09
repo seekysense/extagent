@@ -1,26 +1,56 @@
 export interface ModelInfo {
   name: string;
-  inputPrice: number;  // Price per million tokens
-  outputPrice: number; // Price per million tokens
-  maxTokens?: number;  // Maximum number of tokens the model can generate in a response
-  contextWindow?: number; // Total number of tokens (input + output) the model can process
-  supportsImages?: boolean; // Whether the model supports image inputs
-  supportsPromptCache?: boolean; // Whether the model supports prompt caching
-  cacheWritesPrice?: number; // Price per million tokens for cache writes
-  cacheReadsPrice?: number; // Price per million tokens for cache reads
-  isReasoningModel?: boolean; // Whether this is a reasoning model (GPT-5, o1, o3, etc.)
+  inputPrice: number;
+  outputPrice: number;
+  maxTokens?: number;
+  contextWindow?: number;
+  supportsImages?: boolean;
+  supportsPromptCache?: boolean;
+  cacheWritesPrice?: number;
+  cacheReadsPrice?: number;
+  isReasoningModel?: boolean;
   thinkingConfig?: {
-    maxBudget?: number; // Max allowed thinking budget tokens
-    outputPrice?: number; // Output price per million tokens when budget > 0
+    maxBudget?: number;
+    outputPrice?: number;
   };
+}
+
+export type AgentFunction =
+  | 'default'       // fallback per tutto ciò che non ha mapping esplicito
+  | 'automation'    // task di automazione browser (input libero nel side panel)
+  | 'skill'         // esecuzione di una skill salvata
+  | 'recording'     // registrazione sequenza azioni (record & play)
+  | 'smartPaste'    // Smart Paste — veloce, no thinking
+  | 'smartExtract'  // Smart Extract — estrazione strutturata
+  | 'observation';  // osservazione/analisi pagina senza azione
+
+export interface FunctionMapping {
+  function: AgentFunction;
+  profileId: string;
+}
+
+export interface ModelProfile {
+  id: string;
+  name: string;
+  modelId: string;
+  enableThinking: boolean;
+  thinkingBudget?: number;
+  contextWindowSize?: number;
+  temperature?: number;
+  maxTokens?: number;
 }
 
 export interface ProviderOptions {
   apiKey: string;
-  apiModelId?: string;
   baseUrl?: string;
-  thinkingBudgetTokens?: number;
+  profiles?: ModelProfile[];
+  defaultProfileId?: string;
+  functionMappings?: FunctionMapping[];
   dangerouslyAllowBrowser?: boolean;
+  // Legacy fields — used when profiles is empty
+  apiModelId?: string;
+  openaiCompatibleModels?: Array<{ id: string; name: string; isReasoningModel?: boolean }>;
+  thinkingBudgetTokens?: number;
 }
 
 export interface StreamChunk {
@@ -36,6 +66,7 @@ export interface StreamChunk {
 export type ApiStream = AsyncGenerator<StreamChunk, void, unknown>;
 
 export interface LLMProvider {
-  createMessage(systemPrompt: string, messages: any[], tools?: any[]): ApiStream;
+  createMessage(systemPrompt: string, messages: any[], tools?: any[], profile?: ModelProfile): ApiStream;
   getModel(): { id: string; info: ModelInfo };
+  getDefaultProfile(): ModelProfile | null;
 }

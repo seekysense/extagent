@@ -1,58 +1,14 @@
 import { ConfigManager, ProviderConfig } from '../../../src/background/configManager';
-import { 
-  mockAnthropicConfig, 
-  mockOpenAIConfig, 
-  mockGeminiConfig, 
-  mockOllamaConfig,
-  invalidConfig 
-} from '../../fixtures/sampleConfigs';
-
-// Mock the provider modules to avoid ES module issues
-jest.mock('../../../src/models/providers/anthropic', () => ({
-  AnthropicProvider: {
-    getAvailableModels: jest.fn().mockReturnValue([
-      { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
-      { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet' },
-    ]),
-  },
-}));
-
-jest.mock('../../../src/models/providers/openai', () => ({
-  OpenAIProvider: {
-    getAvailableModels: jest.fn().mockReturnValue([
-      { id: 'gpt-4o', name: 'GPT-4o' },
-      { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    ]),
-  },
-}));
-
-jest.mock('../../../src/models/providers/gemini', () => ({
-  GeminiProvider: {
-    getAvailableModels: jest.fn().mockReturnValue([
-      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-      { id: 'gemini-2.5-flash-preview-05-20', name: 'Gemini 2.5 Flash' },
-    ]),
-  },
-}));
-
-jest.mock('../../../src/models/providers/ollama', () => ({
-  OllamaProvider: {
-    getAvailableModels: jest.fn().mockReturnValue([
-      { id: 'llama2', name: 'Llama 2' },
-      { id: 'llama3.1', name: 'Llama 3.1' },
-    ]),
-  },
-}));
+import { AgentFunction, FunctionMapping, ModelProfile } from '../../../src/models/providers/types';
 
 jest.mock('../../../src/models/providers/openai-compatible', () => ({
   OpenAICompatibleProvider: {
     getAvailableModels: jest.fn().mockReturnValue([
-      { id: 'custom-model', name: 'Custom Model' },
+      { id: 'qwen3-35b', name: 'Qwen3 35B' },
     ]),
   },
 }));
 
-// Mock Chrome storage API
 const mockChromeStorage = {
   sync: {
     get: jest.fn(),
@@ -61,472 +17,230 @@ const mockChromeStorage = {
 };
 
 Object.defineProperty(global, 'chrome', {
-  value: {
-    storage: mockChromeStorage,
-  },
+  value: { storage: mockChromeStorage },
   writable: true,
 });
+
+const thinkingProfile: ModelProfile = {
+  id: 'thinking',
+  name: 'Qwen3 Thinking',
+  modelId: 'qwen3-35b',
+  enableThinking: true,
+  thinkingBudget: 8192,
+};
+
+const fastProfile: ModelProfile = {
+  id: 'fast',
+  name: 'Qwen3 Fast',
+  modelId: 'qwen3-35b',
+  enableThinking: false,
+};
 
 describe('ConfigManager', () => {
   let configManager: ConfigManager;
 
   beforeEach(() => {
+    (ConfigManager as any).instance = undefined;
     configManager = ConfigManager.getInstance();
     jest.clearAllMocks();
   });
 
   describe('getInstance', () => {
-    it('should return a singleton instance', () => {
-      const instance1 = ConfigManager.getInstance();
-      const instance2 = ConfigManager.getInstance();
-      
-      expect(instance1).toBe(instance2);
-      expect(instance1).toBeInstanceOf(ConfigManager);
+    it('restituisce una singleton instance', () => {
+      const a = ConfigManager.getInstance();
+      const b = ConfigManager.getInstance();
+      expect(a).toBe(b);
     });
   });
 
   describe('getProviderConfig', () => {
-    it('should return stored provider configuration', async () => {
+    it('restituisce sempre provider openai-compatible', async () => {
       mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'anthropic',
-        anthropicApiKey: 'test-key',
-        anthropicModelId: 'claude-3-5-sonnet-20241022',
-        anthropicBaseUrl: '',
-        thinkingBudgetTokens: 0,
+        openaiCompatibleApiKey: 'test-key',
+        openaiCompatibleModelId: 'qwen3-35b',
+        openaiCompatibleBaseUrl: 'http://localhost:8000/v1',
+        openaiCompatibleModels: [{ id: 'qwen3-35b', name: 'Qwen3 35B' }],
       });
-
       const config = await configManager.getProviderConfig();
-
-      expect(config).toEqual({
-        provider: 'anthropic',
-        apiKey: 'test-key',
-        apiModelId: 'claude-3-5-sonnet-20241022',
-        baseUrl: '',
-        thinkingBudgetTokens: 0,
-      });
-
-      expect(mockChromeStorage.sync.get).toHaveBeenCalledWith({
-        provider: 'anthropic',
-        anthropicApiKey: '',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        anthropicBaseUrl: '',
-        openaiApiKey: '',
-        openaiModelId: 'gpt-4o',
-        openaiBaseUrl: '',
-        geminiApiKey: '',
-        geminiModelId: 'gemini-1.5-pro',
-        geminiBaseUrl: '',
-        ollamaApiKey: '',
-        ollamaModelId: '',
-        ollamaBaseUrl: '',
-        thinkingBudgetTokens: 0,
-        openaiCompatibleApiKey: '',
-        openaiCompatibleModelId: '',
-        openaiCompatibleBaseUrl: '',
-        openaiCompatibleModels: [],
-      });
+      expect(config.provider).toBe('openai-compatible');
+      expect(config.apiKey).toBe('test-key');
     });
 
-    it('should return default configuration when no provider is set', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'anthropic',
-        anthropicApiKey: '',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        anthropicBaseUrl: '',
-        thinkingBudgetTokens: 0,
-      });
-
-      const config = await configManager.getProviderConfig();
-
-      expect(config).toEqual({
-        provider: 'anthropic',
-        apiKey: '',
-        apiModelId: 'claude-3-7-sonnet-20250219',
-        baseUrl: '',
-        thinkingBudgetTokens: 0,
-      });
-    });
-
-    it('should handle OpenAI configuration', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'openai',
-        openaiApiKey: 'openai-key',
-        openaiModelId: 'gpt-4o',
-        openaiBaseUrl: '',
-      });
-
-      const config = await configManager.getProviderConfig();
-
-      expect(config).toEqual({
-        provider: 'openai',
-        apiKey: 'openai-key',
-        apiModelId: 'gpt-4o',
-        baseUrl: '',
-      });
-    });
-
-    it('should handle Gemini configuration', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'gemini',
-        geminiApiKey: 'gemini-key',
-        geminiModelId: 'gemini-2.5-flash-preview-05-20',
-        geminiBaseUrl: '',
-      });
-
-      const config = await configManager.getProviderConfig();
-
-      expect(config).toEqual({
-        provider: 'gemini',
-        apiKey: 'gemini-key',
-        apiModelId: 'gemini-2.5-flash-preview-05-20',
-        baseUrl: '',
-      });
-    });
-
-    it('should handle Ollama configuration with base URL', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'ollama',
-        ollamaApiKey: 'dummy-key',
-        ollamaModelId: 'llama2',
-        ollamaBaseUrl: 'http://localhost:11434',
-      });
-
-      const config = await configManager.getProviderConfig();
-
-      expect(config).toEqual({
-        provider: 'ollama',
-        apiKey: 'dummy-key',
-        apiModelId: 'llama2',
-        baseUrl: 'http://localhost:11434',
-      });
-    });
-
-    it('should handle OpenAI-compatible configuration', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'openai-compatible',
-        openaiCompatibleApiKey: 'custom-key',
-        openaiCompatibleModelId: 'custom-model',
-        openaiCompatibleBaseUrl: 'https://api.custom.com/v1',
-        openaiCompatibleModels: [{ id: 'custom-model', name: 'Custom Model' }],
-      });
-
-      const config = await configManager.getProviderConfig();
-
-      expect(config).toEqual({
-        provider: 'openai-compatible',
-        apiKey: 'custom-key',
-        apiModelId: 'custom-model',
-        baseUrl: 'https://api.custom.com/v1',
-        openaiCompatibleModels: [{ id: 'custom-model', name: 'Custom Model' }],
-      });
-    });
-
-    it('should handle Chrome storage errors', async () => {
+    it('propaga errori di Chrome storage', async () => {
       mockChromeStorage.sync.get.mockRejectedValue(new Error('Storage error'));
-
       await expect(configManager.getProviderConfig()).rejects.toThrow('Storage error');
-    });
-
-    it('should throw error for unsupported provider', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        provider: 'unsupported',
-      });
-
-      await expect(configManager.getProviderConfig()).rejects.toThrow('Provider unsupported not supported');
-    });
-  });
-
-  describe('saveProviderConfig', () => {
-    it('should save configuration directly', async () => {
-      mockChromeStorage.sync.set.mockResolvedValue(undefined);
-
-      const config: Partial<ProviderConfig> = {
-        provider: 'anthropic',
-        apiKey: 'new-anthropic-key',
-        apiModelId: 'claude-3-5-sonnet-20241022',
-      };
-
-      await configManager.saveProviderConfig(config);
-
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({
-        provider: 'anthropic',
-        apiKey: 'new-anthropic-key',
-        apiModelId: 'claude-3-5-sonnet-20241022',
-      });
-    });
-
-    it('should handle Chrome storage errors during save', async () => {
-      mockChromeStorage.sync.set.mockRejectedValue(new Error('Save error'));
-
-      const config: Partial<ProviderConfig> = {
-        provider: 'anthropic',
-        apiKey: 'test-key',
-      };
-
-      await expect(configManager.saveProviderConfig(config)).rejects.toThrow('Save error');
-    });
-  });
-
-  describe('getConfiguredProviders', () => {
-    it('should return list of configured providers', async () => {
-      // First call for getConfiguredProviders
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        anthropicApiKey: 'anthropic-key',
-        openaiApiKey: 'openai-key',
-        geminiApiKey: '',
-        ollamaApiKey: '',
-        openaiCompatibleApiKey: '',
-        openaiCompatibleModels: [],
-      });
-
-      // Second call for getOllamaBaseUrl
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        ollamaBaseUrl: '',
-      });
-
-      // Third call for ollama custom models check
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        ollamaCustomModels: [],
-      });
-
-      const providers = await configManager.getConfiguredProviders();
-
-      expect(providers).toEqual(['anthropic', 'openai']);
-    });
-
-    it('should include ollama when configured with models', async () => {
-      // First call for getConfiguredProviders
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        anthropicApiKey: 'anthropic-key',
-        openaiApiKey: '',
-        geminiApiKey: '',
-        ollamaApiKey: '',
-        openaiCompatibleApiKey: '',
-        openaiCompatibleModels: [],
-      });
-
-      // Second call for getOllamaBaseUrl
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        ollamaBaseUrl: 'http://localhost:11434',
-      });
-
-      // Third call for ollama custom models check
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        ollamaCustomModels: [{ id: 'llama2', name: 'Llama 2' }],
-      });
-
-      const providers = await configManager.getConfiguredProviders();
-
-      expect(providers).toEqual(['anthropic', 'ollama']);
-    });
-
-    it('should return empty array when no providers are configured', async () => {
-      // First call for getConfiguredProviders
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        anthropicApiKey: '',
-        openaiApiKey: '',
-        geminiApiKey: '',
-        ollamaApiKey: '',
-        openaiCompatibleApiKey: '',
-        openaiCompatibleModels: [],
-      });
-
-      // Second call for getOllamaBaseUrl
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        ollamaBaseUrl: '',
-      });
-
-      // Third call for ollama custom models check
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        ollamaCustomModels: [],
-      });
-
-      const providers = await configManager.getConfiguredProviders();
-
-      expect(providers).toEqual([]);
-    });
-  });
-
-  describe('getOllamaBaseUrl', () => {
-    it('should return stored Ollama base URL', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        ollamaBaseUrl: 'http://localhost:11434',
-      });
-
-      const baseUrl = await configManager.getOllamaBaseUrl();
-
-      expect(baseUrl).toBe('http://localhost:11434');
-    });
-
-    it('should return empty string when not configured', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        ollamaBaseUrl: '',
-      });
-
-      const baseUrl = await configManager.getOllamaBaseUrl();
-
-      expect(baseUrl).toBe('');
-    });
-  });
-
-  describe('updateProviderAndModel', () => {
-    it('should update provider and model configuration', async () => {
-      // First call to get current config
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        provider: 'anthropic',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        openaiModelId: 'gpt-4o',
-        geminiModelId: 'gemini-1.5-pro',
-        ollamaModelId: 'llama3.1',
-      });
-
-      mockChromeStorage.sync.set.mockResolvedValue(undefined);
-
-      await configManager.updateProviderAndModel('openai', 'gpt-4o');
-
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ provider: 'openai' });
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ openaiModelId: 'gpt-4o' });
-    });
-
-    it('should handle Anthropic provider update', async () => {
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        provider: 'anthropic',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        openaiModelId: 'gpt-4o',
-        geminiModelId: 'gemini-1.5-pro',
-        ollamaModelId: 'llama3.1',
-      });
-
-      mockChromeStorage.sync.set.mockResolvedValue(undefined);
-
-      await configManager.updateProviderAndModel('anthropic', 'claude-3-5-sonnet-20241022');
-
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ provider: 'anthropic' });
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ anthropicModelId: 'claude-3-5-sonnet-20241022' });
-    });
-
-    it('should handle Gemini provider update', async () => {
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        provider: 'anthropic',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        openaiModelId: 'gpt-4o',
-        geminiModelId: 'gemini-1.5-pro',
-        ollamaModelId: 'llama3.1',
-      });
-
-      mockChromeStorage.sync.set.mockResolvedValue(undefined);
-
-      await configManager.updateProviderAndModel('gemini', 'gemini-2.5-flash-preview-05-20');
-
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ provider: 'gemini' });
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ geminiModelId: 'gemini-2.5-flash-preview-05-20' });
-    });
-
-    it('should handle Ollama provider update', async () => {
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        provider: 'anthropic',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        openaiModelId: 'gpt-4o',
-        geminiModelId: 'gemini-1.5-pro',
-        ollamaModelId: 'llama3.1',
-      });
-
-      mockChromeStorage.sync.set.mockResolvedValue(undefined);
-
-      await configManager.updateProviderAndModel('ollama', 'llama2');
-
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ provider: 'ollama' });
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ ollamaModelId: 'llama2' });
-    });
-
-    it('should not update model for unsupported provider', async () => {
-      mockChromeStorage.sync.get.mockResolvedValueOnce({
-        provider: 'anthropic',
-        anthropicModelId: 'claude-3-7-sonnet-20250219',
-        openaiModelId: 'gpt-4o',
-        geminiModelId: 'gemini-1.5-pro',
-        ollamaModelId: 'llama3.1',
-      });
-
-      mockChromeStorage.sync.set.mockResolvedValue(undefined);
-
-      await configManager.updateProviderAndModel('unsupported', 'model');
-
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ provider: 'unsupported' });
-      expect(mockChromeStorage.sync.set).toHaveBeenCalledTimes(1); // Only provider update, no model update
     });
   });
 
   describe('getModelsForProvider', () => {
-    it('should return models for Anthropic', async () => {
-      const models = await configManager.getModelsForProvider('anthropic');
-
-      expect(models).toEqual([
-        { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
-        { id: 'claude-3-7-sonnet-20250219', name: 'Claude 3.7 Sonnet' },
-      ]);
-    });
-
-    it('should return models for OpenAI', async () => {
-      const models = await configManager.getModelsForProvider('openai');
-
-      expect(models).toEqual([
-        { id: 'gpt-4o', name: 'GPT-4o' },
-        { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-      ]);
-    });
-
-    it('should return models for Gemini', async () => {
-      const models = await configManager.getModelsForProvider('gemini');
-
-      expect(models).toEqual([
-        { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-        { id: 'gemini-2.5-flash-preview-05-20', name: 'Gemini 2.5 Flash' },
-      ]);
-    });
-
-    it('should return models for Ollama', async () => {
+    it('restituisce i modelli openai-compatible dallo storage', async () => {
       mockChromeStorage.sync.get.mockResolvedValue({
-        ollamaCustomModels: [{ id: 'llama2', name: 'Llama 2' }],
+        openaiCompatibleModels: [{ id: 'qwen3-35b', name: 'Qwen3 35B' }],
       });
-
-      const models = await configManager.getModelsForProvider('ollama');
-
-      expect(models).toEqual([
-        { id: 'llama2', name: 'Llama 2' },
-        { id: 'llama3.1', name: 'Llama 3.1' },
-      ]);
-    });
-
-    it('should return models for OpenAI-compatible', async () => {
-      mockChromeStorage.sync.get.mockResolvedValue({
-        openaiCompatibleModels: [{ id: 'custom-model', name: 'Custom Model' }],
-      });
-
       const models = await configManager.getModelsForProvider('openai-compatible');
-
-      expect(models).toEqual([
-        { id: 'custom-model', name: 'Custom Model' },
-      ]);
+      expect(models).toEqual([{ id: 'qwen3-35b', name: 'Qwen3 35B' }]);
     });
 
-    it('should return empty array for unsupported provider', async () => {
+    it('restituisce array vuoto per provider non supportato', async () => {
+      mockChromeStorage.sync.get.mockResolvedValue({ openaiCompatibleModels: [] });
       const models = await configManager.getModelsForProvider('unsupported');
-
       expect(models).toEqual([]);
     });
   });
 
-  describe('Error handling', () => {
-    it('should handle Chrome storage API unavailability', async () => {
-      // Temporarily remove chrome.storage
-      const originalChrome = global.chrome;
-      delete (global as any).chrome;
+  describe('profili modello', () => {
+    it('getProfiles restituisce array vuoto se nessun profilo salvato', async () => {
+      mockChromeStorage.sync.get.mockResolvedValue({ modelProfiles: [] });
+      const profiles = await configManager.getProfiles();
+      expect(profiles).toEqual([]);
+    });
 
-      await expect(configManager.getProviderConfig()).rejects.toThrow();
+    it('getProfiles restituisce i profili salvati', async () => {
+      mockChromeStorage.sync.get.mockResolvedValue({ modelProfiles: [thinkingProfile, fastProfile] });
+      const profiles = await configManager.getProfiles();
+      expect(profiles).toHaveLength(2);
+      expect(profiles[0].id).toBe('thinking');
+    });
 
-      // Restore chrome object
-      (global as any).chrome = originalChrome;
+    it('saveProfiles persiste i profili in chrome.storage.sync', async () => {
+      mockChromeStorage.sync.set.mockResolvedValue(undefined);
+      await configManager.saveProfiles([thinkingProfile]);
+      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ modelProfiles: [thinkingProfile] });
+    });
+
+    it('getActiveProfile restituisce il profilo con defaultProfileId', async () => {
+      mockChromeStorage.sync.get
+        .mockResolvedValueOnce({ modelProfiles: [thinkingProfile, fastProfile] })
+        .mockResolvedValueOnce({ defaultProfileId: 'fast' });
+      const profile = await configManager.getActiveProfile();
+      expect(profile?.id).toBe('fast');
+    });
+
+    it('getActiveProfile restituisce il primo profilo se defaultProfileId assente', async () => {
+      mockChromeStorage.sync.get
+        .mockResolvedValueOnce({ modelProfiles: [thinkingProfile, fastProfile] })
+        .mockResolvedValueOnce({ defaultProfileId: '' });
+      const profile = await configManager.getActiveProfile();
+      expect(profile?.id).toBe('thinking');
+    });
+
+    it('getActiveProfile restituisce null se nessun profilo', async () => {
+      mockChromeStorage.sync.get
+        .mockResolvedValueOnce({ modelProfiles: [] })
+        .mockResolvedValueOnce({ defaultProfileId: '' });
+      const profile = await configManager.getActiveProfile();
+      expect(profile).toBeNull();
+    });
+
+    it('setDefaultProfileId salva il defaultProfileId nello storage', async () => {
+      mockChromeStorage.sync.set.mockResolvedValue(undefined);
+      await configManager.setDefaultProfileId('fast');
+      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({ defaultProfileId: 'fast' });
+    });
+  });
+
+  describe('routing funzione→profilo', () => {
+    it('getFunctionMappings restituisce array vuoto se nessun mapping salvato', async () => {
+      mockChromeStorage.sync.get.mockResolvedValue({ functionMappings: [] });
+      const mappings = await configManager.getFunctionMappings();
+      expect(mappings).toEqual([]);
+    });
+
+    it('getFunctionMappings restituisce i mapping salvati', async () => {
+      const saved: FunctionMapping[] = [{ function: 'smartPaste', profileId: 'fast' }];
+      mockChromeStorage.sync.get.mockResolvedValue({ functionMappings: saved });
+      const mappings = await configManager.getFunctionMappings();
+      expect(mappings).toEqual(saved);
+    });
+
+    it('setFunctionMapping aggiunge un nuovo mapping', async () => {
+      mockChromeStorage.sync.get.mockResolvedValue({ functionMappings: [] });
+      mockChromeStorage.sync.set.mockResolvedValue(undefined);
+      await configManager.setFunctionMapping('automation', 'thinking');
+      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({
+        functionMappings: [{ function: 'automation', profileId: 'thinking' }],
+      });
+    });
+
+    it('setFunctionMapping aggiorna un mapping esistente', async () => {
+      const existing: FunctionMapping[] = [{ function: 'smartPaste', profileId: 'fast' }];
+      mockChromeStorage.sync.get.mockResolvedValue({ functionMappings: existing });
+      mockChromeStorage.sync.set.mockResolvedValue(undefined);
+      await configManager.setFunctionMapping('smartPaste', 'thinking');
+      expect(mockChromeStorage.sync.set).toHaveBeenCalledWith({
+        functionMappings: [{ function: 'smartPaste', profileId: 'thinking' }],
+      });
+    });
+
+    it('resolveProfileForFunction restituisce il profilo mappato', async () => {
+      mockChromeStorage.sync.get
+        .mockResolvedValueOnce({ functionMappings: [{ function: 'smartPaste', profileId: 'fast' }] })
+        .mockResolvedValueOnce({ modelProfiles: [thinkingProfile, fastProfile] });
+      const profile = await configManager.resolveProfileForFunction('smartPaste');
+      expect(profile?.id).toBe('fast');
+    });
+
+    it('resolveProfileForFunction cade sul profilo attivo se nessun mapping', async () => {
+      mockChromeStorage.sync.get
+        .mockResolvedValueOnce({ functionMappings: [] })           // getFunctionMappings
+        .mockResolvedValueOnce({ modelProfiles: [thinkingProfile, fastProfile] }) // getProfiles in Promise.all
+        .mockResolvedValueOnce({ modelProfiles: [thinkingProfile, fastProfile] }) // getProfiles inside getActiveProfile
+        .mockResolvedValueOnce({ defaultProfileId: 'thinking' });  // getDefaultProfileId inside getActiveProfile
+      const profile = await configManager.resolveProfileForFunction('automation');
+      expect(profile?.id).toBe('thinking');
+    });
+  });
+
+  describe('testConnection', () => {
+    beforeEach(() => {
+      global.fetch = jest.fn();
+    });
+
+    it('restituisce ok=true se il server risponde con status 200', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ status: 200, ok: true });
+      const result = await configManager.testConnection('http://localhost:8000/v1', 'key', 'qwen3-35b');
+      expect(result.ok).toBe(true);
+    });
+
+    it('restituisce ok=true anche per status 400 (server raggiungibile)', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ status: 400, ok: false });
+      const result = await configManager.testConnection('http://localhost:8000/v1', 'key', 'model');
+      expect(result.ok).toBe(true);
+    });
+
+    it('restituisce ok=false con error se status >= 500', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        status: 500,
+        text: jest.fn().mockResolvedValue('Internal Server Error'),
+      });
+      const result = await configManager.testConnection('http://localhost:8000/v1', 'key', 'model');
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('500');
+    });
+
+    it('restituisce ok=false con error se la chiamata fallisce (network error)', async () => {
+      (global.fetch as jest.Mock).mockRejectedValue(new Error('Network unreachable'));
+      const result = await configManager.testConnection('http://localhost:8000/v1', 'key', 'model');
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('Network unreachable');
+    });
+
+    it('usa il baseUrl passato come parametro nella chiamata', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ status: 200 });
+      await configManager.testConnection('http://my-server:9000/v1', 'key', 'model');
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://my-server:9000/v1/chat/completions',
+        expect.any(Object)
+      );
+    });
+
+    it('rimuove trailing slash dal baseUrl prima di aggiungere il path', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ status: 200 });
+      await configManager.testConnection('http://localhost:8000/v1/', 'key', 'model');
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:8000/v1/chat/completions',
+        expect.any(Object)
+      );
     });
   });
 });

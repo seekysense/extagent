@@ -237,7 +237,8 @@ describe('ExecutionEngine', () => {
           { role: 'assistant', content: 'Previous response' },
           { role: 'user', content: 'Continue' },
         ]),
-        expect.any(Array) // tools
+        expect.any(Array), // tools
+        undefined           // activeProfile (not set)
       );
     });
   });

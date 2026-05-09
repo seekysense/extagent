@@ -29,7 +29,7 @@ Object.defineProperty(global, 'chrome', {
 });
 
 // Import after mocking
-import { requestApproval, handleApprovalResponse } from '../../../src/agent/approvalManager';
+import { requestApproval, handleApprovalResponse, requiresApproval } from '../../../src/agent/approvalManager';
 import { getWindowForTab } from '../../../src/background/tabManager';
 
 // Type the mocked function
@@ -805,6 +805,32 @@ describe('approvalManager', () => {
       results.forEach((result, index) => {
         expect(result).toBe(index % 3 === 0);
       });
+    });
+  });
+
+  describe('requiresApproval - pattern italiani', () => {
+    it('richiede approvazione per click su bottone "Invia"', () => {
+      expect(requiresApproval('browser_click', 'Invia')).toBe(true);
+    });
+
+    it('richiede approvazione per click su bottone "Conferma"', () => {
+      expect(requiresApproval('browser_click', 'Conferma ordine')).toBe(true);
+    });
+
+    it('richiede approvazione per click su bottone "Elimina"', () => {
+      expect(requiresApproval('browser_click', 'Elimina record')).toBe(true);
+    });
+
+    it('richiede approvazione per click su bottone "Salva"', () => {
+      expect(requiresApproval('browser_click', 'Salva modifiche')).toBe(true);
+    });
+
+    it('NON richiede approvazione per fill_form_from_data (solo compilazione)', () => {
+      expect(requiresApproval('fill_form_from_data', '{"data":{"nome":"Acme"}}')).toBe(false);
+    });
+
+    it('richiede approvazione per fill_form_submit', () => {
+      expect(requiresApproval('fill_form_submit', 'submit')).toBe(true);
     });
   });
 

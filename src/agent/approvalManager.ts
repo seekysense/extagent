@@ -1,5 +1,34 @@
 import { getWindowForTab } from '../background/tabManager';
 
+const SUBMIT_PATTERNS = [
+  /\bsubmit\b/i, /\bsend\b/i, /\bconfirm\b/i, /\bsave\b/i,
+  /\binvia\b/i, /\bconferma\b/i, /\bsalva\b/i, /\bpubblica\b/i,
+  /\bregistra\b/i, /\baggiungi\b/i,
+];
+
+const DELETE_PATTERNS = [
+  /\belimina\b/i, /\bcancella\b/i, /\brimuovi\b/i, /\bdelete\b/i,
+  /\bremove\b/i, /\bcancel\b/i,
+];
+
+/**
+ * Heuristic check: should this tool call require explicit user approval?
+ * Used as a secondary safeguard in addition to the LLM's own requires_approval flag.
+ */
+export function requiresApproval(toolName: string, toolInput: string): boolean {
+  // fill_form_submit always requires approval; fill_form_from_data (field fill only) does not
+  if (toolName === 'fill_form_submit') return true;
+  if (toolName === 'fill_form_from_data') return false;
+
+  // For click actions, check input text against submit/delete patterns
+  if (toolName === 'browser_click') {
+    if (SUBMIT_PATTERNS.some(p => p.test(toolInput))) return true;
+    if (DELETE_PATTERNS.some(p => p.test(toolInput))) return true;
+  }
+
+  return false;
+}
+
 // Pending approvals map
 const pendingApprovals = new Map<string, {
   resolve: (approved: boolean) => void,

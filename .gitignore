@@ -20,6 +20,7 @@ build/
 *.swo
 .DS_Store
 Thumbs.db
+prd/
 
 # Logs
 logs
@@ -36,3 +37,4 @@ coverage/
 .cache/
 .temp/
 api_keys.txt
+.env

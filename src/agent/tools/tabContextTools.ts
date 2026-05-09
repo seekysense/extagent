@@ -1,4 +1,3 @@
-import { DynamicTool } from "langchain/tools";
 import type { Page } from "playwright-crx";
 import { getCurrentPage } from "../PageContextManager";
 import { ToolFactory } from "./types";
@@ -8,7 +7,7 @@ import { getCurrentTabId } from "./utils";
  * Tool to get information about the currently active tab
  */
 export const browserGetActiveTab: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_get_active_tab",
     description: "Returns information about the currently active tab, including its index, URL, and title.",
     func: async () => {
@@ -62,7 +61,7 @@ export const browserGetActiveTab: ToolFactory = (page: Page) =>
  * Tool to navigate a specific tab to a URL
  */
 export const browserNavigateTab: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_navigate_tab",
     description: "Navigate a specific tab to a URL. Input format: 'tabIndex|url' (e.g., '1|https://example.com')",
     func: async (input: string) => {
@@ -136,7 +135,7 @@ export const browserNavigateTab: ToolFactory = (page: Page) =>
  * Tool to take a screenshot of a specific tab
  */
 export const browserScreenshotTab: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_screenshot_tab",
     description: "Take a screenshot of a specific tab by index. Input format: 'tabIndex[,flags]' (e.g., '1,full')",
     func: async (input: string) => {

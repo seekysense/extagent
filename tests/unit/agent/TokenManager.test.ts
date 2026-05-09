@@ -1,8 +1,23 @@
 import { jest } from '@jest/globals';
-import { approxTokens, contextTokenCount, trimHistory } from '../../../src/agent/TokenManager';
-import Anthropic from '@anthropic-ai/sdk';
+import { approxTokens, contextTokenCount, trimHistory, truncateObservation, TokenManager } from '../../../src/agent/TokenManager';
+
+type Message = { role: string; content: string | any };
 
 describe('TokenManager', () => {
+  describe('TokenManager - costruttore', () => {
+    it('accetta contextWindowSize e calcola soglia di trimming come 70%', () => {
+      const tm = new TokenManager(8000);
+      expect(tm.contextWindowSize).toBe(8000);
+      expect(tm.trimThreshold).toBe(5600); // Math.floor(8000 * 0.70)
+    });
+
+    it('default a 32000 se contextWindowSize non specificato', () => {
+      const tm = new TokenManager();
+      expect(tm.contextWindowSize).toBe(32000);
+      expect(tm.trimThreshold).toBe(22400); // Math.floor(32000 * 0.70)
+    });
+  });
+
   describe('approxTokens', () => {
     it('should estimate tokens using char/4 formula', () => {
       expect(approxTokens('hello')).toBe(2); // 5 chars / 4 = 1.25, ceil = 2
@@ -37,7 +52,7 @@ describe('TokenManager', () => {
 
   describe('contextTokenCount', () => {
     it('should count tokens for simple messages', () => {
-      const messages: Anthropic.MessageParam[] = [
+      const messages: Message[] = [
         { role: 'user', content: 'hello' }, // 2 tokens
         { role: 'assistant', content: 'world' } // 2 tokens
       ];
@@ -49,7 +64,7 @@ describe('TokenManager', () => {
     });
 
     it('should handle messages with complex content', () => {
-      const messages: Anthropic.MessageParam[] = [
+      const messages: Message[] = [
         { role: 'user', content: 'This is a longer message' }, // 6 tokens
         { role: 'assistant', content: 'Short' } // 2 tokens
       ];
@@ -71,17 +86,17 @@ describe('TokenManager', () => {
         { role: 'assistant', content: { complex: 'object', with: ['array', 'items'] } },
         { role: 'user', content: 'another message' }
       ];
-      
-      const expectedTokens = 
+
+      const expectedTokens =
         approxTokens('simple text') +
         approxTokens(JSON.stringify({ complex: 'object', with: ['array', 'items'] })) +
         approxTokens('another message');
-      
+
       expect(contextTokenCount(messages)).toBe(expectedTokens);
     });
 
     it('should handle large message arrays efficiently', () => {
-      const messages: Anthropic.MessageParam[] = Array.from({ length: 1000 }, (_, i) => ({
+      const messages: Message[] = Array.from({ length: 1000 }, (_, i) => ({
         role: i % 2 === 0 ? 'user' : 'assistant',
         content: `Message ${i} with some content`
       }));
@@ -93,7 +108,7 @@ describe('TokenManager', () => {
   });
 
   describe('trimHistory', () => {
-    const createMessage = (role: 'user' | 'assistant', content: string): Anthropic.MessageParam => ({
+    const createMessage = (role: string, content: string): Message => ({
       role,
       content
     });
@@ -103,8 +118,8 @@ describe('TokenManager', () => {
         createMessage('user', 'hello'),
         createMessage('assistant', 'hi')
       ];
-      
-      const result = trimHistory(messages, 1000);
+
+      const { trimmed: result } = trimHistory(messages, 1000);
       expect(result).toEqual(messages);
       expect(result.length).toBe(2);
     });
@@ -113,8 +128,8 @@ describe('TokenManager', () => {
       const messages = [
         createMessage('user', 'a'.repeat(20000)) // Very long message
       ];
-      
-      const result = trimHistory(messages, 100);
+
+      const { trimmed: result } = trimHistory(messages, 100);
       expect(result).toEqual(messages);
       expect(result.length).toBe(1);
     });
@@ -127,9 +142,9 @@ describe('TokenManager', () => {
         createMessage('assistant', 'a'.repeat(4000)), // Large assistant message
         createMessage('user', 'third user message')
       ];
-      
-      const result = trimHistory(messages, 100);
-      
+
+      const { trimmed: result } = trimHistory(messages, 100);
+
       // Should keep all user messages
       const userMessages = result.filter(m => m.role === 'user');
       expect(userMessages.length).toBe(3);
@@ -145,9 +160,9 @@ describe('TokenManager', () => {
         createMessage('user', 'follow up'),
         createMessage('assistant', 'a'.repeat(8000))
       ];
-      
-      const result = trimHistory(messages, 100);
-      
+
+      const { trimmed: result } = trimHistory(messages, 100);
+
       expect(result[0]).toEqual(messages[0]);
       expect(result[0].content).toBe('original request');
     });
@@ -159,12 +174,12 @@ describe('TokenManager', () => {
         createMessage('assistant', 'newer response'),
         createMessage('assistant', 'newest response')
       ];
-      
-      const result = trimHistory(messages, 50);
-      
+
+      const { trimmed: result } = trimHistory(messages, 50);
+
       // Should keep user message and newest assistant messages that fit
       expect(result.some(m => m.content === 'request')).toBe(true);
-      
+
       // Should prefer newer assistant messages
       const assistantMessages = result.filter(m => m.role === 'assistant');
       if (assistantMessages.length > 0) {
@@ -182,13 +197,13 @@ describe('TokenManager', () => {
         createMessage('assistant', 'response3'),
         createMessage('assistant', 'response4')
       ];
-      
-      const result = trimHistory(messages, 100);
-      
+
+      const { trimmed: result } = trimHistory(messages, 100);
+
       // All user messages should be preserved
       const userMessages = result.filter(m => m.role === 'user');
       expect(userMessages.length).toBe(3);
-      
+
       // Messages should be in original order
       let lastIndex = -1;
       for (const msg of result) {
@@ -204,12 +219,12 @@ describe('TokenManager', () => {
         createMessage('assistant', 'a'.repeat(40)), // ~10 tokens
         createMessage('user', 'a'.repeat(40)) // ~10 tokens
       ];
-      
-      const result = trimHistory(messages, 25);
-      
+
+      const { trimmed: result } = trimHistory(messages, 25);
+
       // Should fit within the custom limit
       expect(contextTokenCount(result)).toBeLessThanOrEqual(25);
-      
+
       // Should still preserve user messages
       const userMessages = result.filter(m => m.role === 'user');
       expect(userMessages.length).toBe(2); // Both user messages should fit
@@ -221,9 +236,9 @@ describe('TokenManager', () => {
         createMessage('assistant', 'response2'),
         createMessage('assistant', 'response3')
       ];
-      
-      const result = trimHistory(messages, 50);
-      
+
+      const { trimmed: result } = trimHistory(messages, 50);
+
       // Should keep the first message and newer ones that fit
       expect(result[0]).toEqual(messages[0]);
       expect(result.length).toBeGreaterThan(0);
@@ -235,9 +250,9 @@ describe('TokenManager', () => {
         createMessage('assistant', 'a'.repeat(100)), // ~25 tokens
         createMessage('user', 'a'.repeat(100)) // ~25 tokens
       ];
-      
-      const result = trimHistory(messages, 30);
-      
+
+      const { trimmed: result } = trimHistory(messages, 30);
+
       // Should at least keep the first message
       expect(result.length).toBeGreaterThan(0);
       expect(result[0]).toEqual(messages[0]);
@@ -252,9 +267,9 @@ describe('TokenManager', () => {
         createMessage('user', 'msg5'),
         createMessage('assistant', 'msg6')
       ];
-      
-      const result = trimHistory(messages, 100);
-      
+
+      const { trimmed: result } = trimHistory(messages, 100);
+
       // Verify order is maintained
       for (let i = 1; i < result.length; i++) {
         const currentIndex = messages.indexOf(result[i]);
@@ -264,31 +279,31 @@ describe('TokenManager', () => {
     });
 
     it('should handle empty messages array', () => {
-      const result = trimHistory([], 1000);
+      const { trimmed: result } = trimHistory([], 1000);
       expect(result).toEqual([]);
     });
 
     it('should handle single message', () => {
       const messages = [createMessage('user', 'single message')];
-      const result = trimHistory(messages, 1000);
+      const { trimmed: result } = trimHistory(messages, 1000);
       expect(result).toEqual(messages);
     });
 
     it('should use default max tokens when not specified', () => {
       // Create messages that will definitely exceed the default limit
-      const messages = Array.from({ length: 1000 }, (_, i) => 
+      const messages = Array.from({ length: 1000 }, (_, i) =>
         createMessage(i % 2 === 0 ? 'user' : 'assistant', `This is a longer message ${i} with substantial content that will accumulate to exceed the default token limit`)
       );
-      
-      const result = trimHistory(messages); // No maxTokens specified
-      
+
+      const { trimmed: result } = trimHistory(messages); // No maxTokens specified
+
       // Should significantly reduce the number of messages
       expect(result.length).toBeLessThan(messages.length);
-      
-      // Should be reasonably close to the default limit (allowing for user message preservation)
+
+      // Should be within a reasonable bound above the 70% threshold (with user message preservation)
       const resultTokens = contextTokenCount(result);
-      expect(resultTokens).toBeLessThan(15000); // Allow some buffer for user message preservation
-      
+      expect(resultTokens).toBeLessThan(30000);
+
       // Should preserve all user messages
       const originalUserMessages = messages.filter(m => m.role === 'user');
       const resultUserMessages = result.filter(m => m.role === 'user');
@@ -301,9 +316,9 @@ describe('TokenManager', () => {
         createMessage('assistant', 'short'),
         createMessage('user', 'another user message')
       ];
-      
-      const result = trimHistory(messages, 1000);
-      
+
+      const { trimmed: result } = trimHistory(messages, 1000);
+
       // Should preserve user messages even if they're long
       const userMessages = result.filter(m => m.role === 'user');
       expect(userMessages.length).toBe(2);
@@ -318,50 +333,84 @@ describe('TokenManager', () => {
         createMessage('user', 'user3'),
         createMessage('assistant', 'assistant3')
       ];
-      
-      const result = trimHistory(messages, 50);
-      
+
+      const { trimmed: result } = trimHistory(messages, 50);
+
       // All user messages should be preserved
       const userMessages = result.filter(m => m.role === 'user');
       expect(userMessages.length).toBe(3);
-      
+
       // Should maintain alternating pattern where possible
       expect(result[0].role).toBe('user'); // First message
     });
 
     it('should handle performance with large message arrays', () => {
-      const messages = Array.from({ length: 10000 }, (_, i) => 
+      const messages = Array.from({ length: 10000 }, (_, i) =>
         createMessage(i % 2 === 0 ? 'user' : 'assistant', `Message ${i}`)
       );
-      
+
       const startTime = Date.now();
-      const result = trimHistory(messages, 1000);
+      const { trimmed: result } = trimHistory(messages, 1000);
       const endTime = Date.now();
-      
+
       // Should complete in reasonable time (less than 1 second)
       expect(endTime - startTime).toBeLessThan(1000);
       expect(result.length).toBeGreaterThan(0);
       expect(result.length).toBeLessThan(messages.length);
     });
+
+    it('restituisce removedSummaryPrompt non-null quando ha tagliato', () => {
+      const messages = [
+        createMessage('user', 'start'),
+        createMessage('assistant', 'a'.repeat(4000)),
+        createMessage('user', 'end'),
+      ];
+      const { removedSummaryPrompt } = trimHistory(messages, 100);
+      expect(removedSummaryPrompt).not.toBeNull();
+    });
+
+    it('restituisce removedSummaryPrompt null quando non ha tagliato', () => {
+      const messages = [
+        createMessage('user', 'hello'),
+        createMessage('assistant', 'hi'),
+      ];
+      const { removedSummaryPrompt } = trimHistory(messages, 1000);
+      expect(removedSummaryPrompt).toBeNull();
+    });
+  });
+
+  describe('truncateObservation', () => {
+    it('restituisce il testo invariato se sotto budget', () => {
+      const text = 'hello world'; // 11 chars
+      // budget 10 tokens = 40 chars > 11 chars → no truncation
+      expect(truncateObservation(text, 10)).toBe(text);
+    });
+
+    it('tronca e aggiunge [...troncato] se oltre budget', () => {
+      const text = 'a'.repeat(100); // 100 chars
+      // budget 10 tokens = 40 chars < 100 chars → truncate
+      const result = truncateObservation(text, 10);
+      expect(result).toBe('a'.repeat(40) + '[...troncato]');
+    });
   });
 
   describe('Integration Tests', () => {
     it('should work together for complete token management workflow', () => {
-      const messages: Anthropic.MessageParam[] = [
+      const messages: Message[] = [
         { role: 'user', content: 'What is the weather like?' },
         { role: 'assistant', content: 'I can help you check the weather. What location are you interested in?' },
         { role: 'user', content: 'San Francisco, CA' },
         { role: 'assistant', content: 'The weather in San Francisco is currently sunny with a temperature of 72°F.' }
       ];
-      
+
       // Calculate initial token count
       const initialTokens = contextTokenCount(messages);
       expect(initialTokens).toBeGreaterThan(0);
-      
+
       // Trim with restrictive limit
-      const trimmed = trimHistory(messages, 30);
+      const { trimmed } = trimHistory(messages, 30);
       const trimmedTokens = contextTokenCount(trimmed);
-      
+
       // Should be under limit and preserve user messages
       expect(trimmedTokens).toBeLessThanOrEqual(30);
       const userMessages = trimmed.filter(m => m.role === 'user');
@@ -369,7 +418,7 @@ describe('TokenManager', () => {
     });
 
     it('should handle real-world conversation patterns', () => {
-      const conversation: Anthropic.MessageParam[] = [
+      const conversation: Message[] = [
         { role: 'user', content: 'I need help with my JavaScript code' },
         { role: 'assistant', content: 'I\'d be happy to help! Please share your code and describe the issue you\'re experiencing.' },
         { role: 'user', content: 'Here\'s my code: function test() { console.log("hello"); }' },
@@ -379,14 +428,14 @@ describe('TokenManager', () => {
         { role: 'user', content: 'Thank you!' },
         { role: 'assistant', content: 'You\'re welcome! Feel free to ask if you have more questions.' }
       ];
-      
+
       const originalCount = contextTokenCount(conversation);
-      const trimmed = trimHistory(conversation, 100);
+      const { trimmed } = trimHistory(conversation, 100);
       const trimmedCount = contextTokenCount(trimmed);
-      
+
       expect(trimmedCount).toBeLessThanOrEqual(100);
       expect(trimmed.length).toBeLessThanOrEqual(conversation.length);
-      
+
       // Should preserve the conversation flow
       expect(trimmed[0].role).toBe('user'); // First message preserved
       const userMessages = trimmed.filter(m => m.role === 'user');

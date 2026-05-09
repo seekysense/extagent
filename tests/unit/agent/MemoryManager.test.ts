@@ -1,13 +1,14 @@
 import { jest } from '@jest/globals';
 import { MemoryManager } from '../../../src/agent/MemoryManager';
 import { BrowserTool } from '../../../src/agent/tools/types';
-import Anthropic from '@anthropic-ai/sdk';
+
+type Message = { role: string; content: string | any };
 
 describe('MemoryManager', () => {
   let memoryManager: MemoryManager;
   let mockMemoryTool: BrowserTool;
   let mockTools: BrowserTool[];
-  let messages: Anthropic.MessageParam[];
+  let messages: Message[];
   let consoleSpy: any;
 
   beforeEach(() => {
@@ -486,5 +487,145 @@ describe('MemoryManager', () => {
       // Should still work correctly
       expect(() => memoryManager.updateMemoryTool(mockTools)).not.toThrow();
     });
+  });
+});
+
+// ─── Storage-based memory tests ───────────────────────────────────────────────
+
+const store: Record<string, any> = {};
+
+function setupStorageMocks() {
+  (chrome.storage.local.get as jest.Mock).mockImplementation(async (key: string) => ({
+    [key]: store[key] ?? undefined,
+  }));
+  (chrome.storage.local.set as jest.Mock).mockImplementation(async (data: Record<string, any>) => {
+    Object.assign(store, data);
+  });
+  (chrome.storage.sync.get as jest.Mock).mockImplementation(async (defaults: Record<string, any>) => {
+    const result: Record<string, any> = {};
+    for (const [k, def] of Object.entries(defaults)) {
+      result[k] = k in store ? store[k] : def;
+    }
+    return result;
+  });
+}
+
+beforeEach(() => {
+  Object.keys(store).forEach(k => delete store[k]);
+  setupStorageMocks();
+});
+
+describe('MemoryManager - default ON', () => {
+  it('memoryEnabled=true di default senza configurazione', async () => {
+    const enabled = await MemoryManager.isMemoryEnabled();
+    expect(enabled).toBe(true);
+  });
+});
+
+describe('lookupMemories - ranking', () => {
+  it('restituisce prima le memorie validate', async () => {
+    const manager = new MemoryManager([]);
+    await manager.saveMemory({ id: '1', domain: 'test.it', pattern: 'step A', validated: false, useCount: 5 });
+    await manager.saveMemory({ id: '2', domain: 'test.it', pattern: 'step B', validated: true, useCount: 1 });
+    const results = await manager.getSortedMemories('test.it');
+    expect(results[0].id).toBe('2'); // validated first
+    expect(results[1].id).toBe('1');
+  });
+
+  it('a parità di validazione, ordina per useCount decrescente', async () => {
+    const manager = new MemoryManager([]);
+    await manager.saveMemory({ id: '1', domain: 'test.it', pattern: 'low', validated: false, useCount: 2 });
+    await manager.saveMemory({ id: '2', domain: 'test.it', pattern: 'high', validated: false, useCount: 10 });
+    const results = await manager.getSortedMemories('test.it');
+    expect(results[0].id).toBe('2');
+    expect(results[1].id).toBe('1');
+  });
+
+  it('non restituisce memorie più vecchie di 30 giorni con useCount=0', async () => {
+    const manager = new MemoryManager([]);
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    await manager.saveMemory({ id: '1', domain: 'test.it', pattern: 'old', validated: false, useCount: 0, createdAt: old });
+    await manager.saveMemory({ id: '2', domain: 'test.it', pattern: 'new', validated: false, useCount: 0 });
+    const results = await manager.getSortedMemories('test.it');
+    expect(results.map(r => r.id)).not.toContain('1');
+    expect(results.map(r => r.id)).toContain('2');
+  });
+});
+
+describe('markValidated', () => {
+  it('imposta validated=true sulla memoria', async () => {
+    const manager = new MemoryManager([]);
+    await manager.saveMemory({ id: 'abc', domain: 'test.it', pattern: 'pattern', validated: false, useCount: 0 });
+    await manager.markValidated('abc');
+    const results = await manager.getSortedMemories('test.it');
+    expect(results[0].validated).toBe(true);
+  });
+
+  it('incrementa useCount', async () => {
+    const manager = new MemoryManager([]);
+    await manager.saveMemory({ id: 'abc', domain: 'test.it', pattern: 'pattern', validated: false, useCount: 3 });
+    await manager.markValidated('abc');
+    const results = await manager.getSortedMemories('test.it');
+    expect(results[0].useCount).toBe(4);
+  });
+});
+
+describe('saveMemory - privacy check', () => {
+  it('accetta memoria con pattern testuale pulito', async () => {
+    const manager = new MemoryManager([]);
+    await expect(
+      manager.saveMemory({ domain: 'test.it', pattern: 'Clicca il pulsante Cerca', validated: false, useCount: 0 })
+    ).resolves.not.toThrow();
+  });
+
+  it('lancia errore se pattern contiene tag HTML', async () => {
+    const manager = new MemoryManager([]);
+    await expect(
+      manager.saveMemory({ domain: 'test.it', pattern: "<div class='foo'>testo</div>", validated: false, useCount: 0 })
+    ).rejects.toThrow('La memoria non può contenere HTML di pagina');
+  });
+});
+
+describe('export/import', () => {
+  it('exportMemories serializza tutte le memorie in JSON', async () => {
+    const manager = new MemoryManager([]);
+    await manager.saveMemory({ id: '1', domain: 'a.it', pattern: 'A', validated: false, useCount: 0 });
+    await manager.saveMemory({ id: '2', domain: 'b.it', pattern: 'B', validated: true, useCount: 2 });
+    const json = await manager.exportMemories();
+    const parsed = JSON.parse(json);
+    expect(parsed).toHaveLength(2);
+    expect(parsed.map((m: any) => m.id)).toContain('1');
+    expect(parsed.map((m: any) => m.id)).toContain('2');
+  });
+
+  it('importMemories aggiunge le memorie non duplicate', async () => {
+    const manager = new MemoryManager([]);
+    const json = JSON.stringify([
+      { id: 'x1', domain: 'nuovo.it', pattern: 'pattern X', validated: false, useCount: 0, createdAt: '', updatedAt: '' },
+    ]);
+    const count = await manager.importMemories(json);
+    expect(count).toBe(1);
+    const results = await manager.getSortedMemories('nuovo.it');
+    expect(results).toHaveLength(1);
+  });
+
+  it('importMemories skippa duplicati (stesso domain+pattern)', async () => {
+    const manager = new MemoryManager([]);
+    await manager.saveMemory({ id: 'orig', domain: 'dup.it', pattern: 'step dup', validated: false, useCount: 0 });
+    const json = JSON.stringify([
+      { id: 'dupe', domain: 'dup.it', pattern: 'step dup', validated: true, useCount: 5, createdAt: '', updatedAt: '' },
+    ]);
+    const count = await manager.importMemories(json);
+    expect(count).toBe(0);
+  });
+
+  it('importMemories restituisce il conteggio delle memorie aggiunte', async () => {
+    const manager = new MemoryManager([]);
+    const json = JSON.stringify([
+      { id: 'a', domain: 'x.it', pattern: 'p1', validated: false, useCount: 0, createdAt: '', updatedAt: '' },
+      { id: 'b', domain: 'x.it', pattern: 'p2', validated: false, useCount: 0, createdAt: '', updatedAt: '' },
+    ]);
+    const count = await manager.importMemories(json);
+    expect(count).toBe(2);
   });
 });

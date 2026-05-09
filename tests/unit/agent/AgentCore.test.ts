@@ -1,6 +1,6 @@
 import { createMockPage } from '../../mocks/playwright';
 import { createMockProvider } from '../../mocks/providers';
-import { mockAnthropicConfig } from '../../fixtures/sampleConfigs';
+import { mockOpenAICompatibleConfig } from '../../fixtures/sampleConfigs';
 
 // Mock the dependencies before importing the main module
 jest.mock('../../../src/agent/tools/index', () => ({
@@ -22,18 +22,20 @@ jest.mock('../../../src/background/configManager', () => ({
   ConfigManager: {
     getInstance: jest.fn().mockReturnValue({
       getProviderConfig: jest.fn().mockResolvedValue({
-        provider: 'anthropic',
-        apiKey: 'test-anthropic-key',
-        apiModelId: 'claude-3-5-sonnet-20241022',
-        baseUrl: undefined,
-        thinkingBudgetTokens: undefined,
+        provider: 'openai-compatible',
+        apiKey: 'test-key',
+        apiModelId: 'qwen3-35b',
+        baseUrl: 'http://localhost:8000/v1',
       }),
+      getProfiles: jest.fn().mockResolvedValue([]),
+      getDefaultProfileId: jest.fn().mockResolvedValue(''),
+      getActiveProfile: jest.fn().mockResolvedValue(null),
     }),
   },
 }));
 
 jest.mock('../../../src/models/providers/factory', () => ({
-  createProvider: jest.fn().mockImplementation(() => Promise.resolve(createMockProvider())),
+  createProvider: jest.fn().mockImplementation(() => createMockProvider()),
 }));
 
 // Import after mocks are set up
@@ -51,14 +53,14 @@ describe('BrowserAgent', () => {
 
   describe('constructor', () => {
     it('should initialize with page, config, and provider', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       expect(agent).toBeInstanceOf(BrowserAgent);
       expect(agent.promptManager).toBeDefined();
     });
 
     it('should convert tools from DynamicTool to BrowserTool format', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       // The agent should have successfully converted and initialized tools
       expect(agent).toBeInstanceOf(BrowserAgent);
@@ -67,20 +69,20 @@ describe('BrowserAgent', () => {
 
   describe('convertToBrowserTools', () => {
     it('should convert DynamicTool objects to BrowserTool format', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       // Test that the conversion worked by checking the agent was created successfully
       expect(agent).toBeInstanceOf(BrowserAgent);
     });
 
     it('should handle tools already in BrowserTool format', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       expect(agent).toBeInstanceOf(BrowserAgent);
     });
 
     it('should handle unknown tool formats gracefully', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       expect(agent).toBeInstanceOf(BrowserAgent);
     });
@@ -88,7 +90,7 @@ describe('BrowserAgent', () => {
 
   describe('cancel', () => {
     it('should cancel current execution', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       expect(() => agent.cancel()).not.toThrow();
     });
@@ -96,7 +98,7 @@ describe('BrowserAgent', () => {
 
   describe('resetCancel', () => {
     it('should reset the cancel flag', () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       agent.cancel();
       expect(() => agent.resetCancel()).not.toThrow();
@@ -105,7 +107,7 @@ describe('BrowserAgent', () => {
 
   describe('isStreamingSupported', () => {
     it('should return streaming support status', async () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       const isSupported = await agent.isStreamingSupported();
       expect(typeof isSupported).toBe('boolean');
@@ -114,7 +116,7 @@ describe('BrowserAgent', () => {
 
   describe('executePrompt', () => {
     it('should execute a prompt successfully', async () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       const mockCallbacks = {
         onLlmChunk: jest.fn(),
@@ -134,7 +136,7 @@ describe('BrowserAgent', () => {
     });
 
     it('should handle execution with initial messages', async () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
       
       const mockCallbacks = {
         onLlmChunk: jest.fn(),
@@ -160,8 +162,8 @@ describe('BrowserAgent', () => {
 
   describe('executePromptWithFallback', () => {
     it('should execute prompt with fallback support', async () => {
-      const agent = new BrowserAgent(mockPage, mockAnthropicConfig, mockProvider);
-      
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
+
       const mockCallbacks = {
         onLlmChunk: jest.fn(),
         onLlmOutput: jest.fn(),
@@ -177,6 +179,28 @@ describe('BrowserAgent', () => {
       await expect(
         agent.executePromptWithFallback('Test prompt', mockCallbacks)
       ).resolves.not.toThrow();
+    });
+  });
+
+  describe('setMaxSteps / setMinMsBetweenCalls', () => {
+    it('setMaxSteps non lancia eccezioni', () => {
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
+      expect(() => agent.setMaxSteps(10)).not.toThrow();
+    });
+
+    it('setMaxSteps accetta valori arbitrari', () => {
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
+      expect(() => agent.setMaxSteps(100)).not.toThrow();
+    });
+
+    it('setMinMsBetweenCalls non lancia eccezioni', () => {
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
+      expect(() => agent.setMinMsBetweenCalls(1000)).not.toThrow();
+    });
+
+    it('setMinMsBetweenCalls accetta valore zero', () => {
+      const agent = new BrowserAgent(mockPage, mockOpenAICompatibleConfig, mockProvider);
+      expect(() => agent.setMinMsBetweenCalls(0)).not.toThrow();
     });
   });
 });
@@ -256,7 +280,7 @@ describe('needsReinitialization', () => {
   });
 
   it('should handle provider configuration parameter', async () => {
-    const result = await needsReinitialization(agent, mockAnthropicConfig);
+    const result = await needsReinitialization(agent, mockOpenAICompatibleConfig);
     
     expect(result).toBe(true);
   });

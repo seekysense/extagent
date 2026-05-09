@@ -1,5 +1,6 @@
 import { crx } from 'playwright-crx';
 import { BrowserAgent } from '../agent/AgentCore';
+import { setCurrentPage, resetPageContext } from '../agent/PageContextManager';
 import { TabState, WindowState } from './types';
 import { logWithTimestamp, handleError } from './utils';
 
@@ -385,7 +386,6 @@ export async function attachToTab(tabId: number, windowId?: number, retryCount: 
       
       // Update PageContextManager with the new page
       try {
-        const { setCurrentPage } = await import('../agent/PageContextManager');
         setCurrentPage(page);
         logWithTimestamp(`Updated PageContextManager with page for tab ${tabId}`);
       } catch (error) {
@@ -646,6 +646,30 @@ export async function resetPlaywright(): Promise<boolean> {
   }
 }
 
+type TabEventHandler = (tabId: number) => void;
+let tabClosedHandler: TabEventHandler | null = null;
+let tabReloadedHandler: TabEventHandler | null = null;
+
+export function setTabClosedHandler(handler: TabEventHandler): void {
+  tabClosedHandler = handler;
+}
+
+export function setTabReloadedHandler(handler: TabEventHandler): void {
+  tabReloadedHandler = handler;
+}
+
+export function handleTabClosed(tabId: number): void {
+  if (!isTabAttached(tabId)) return;
+  getAgentForTab(tabId)?.cancel();
+  removeAttachedTab(tabId);
+  tabClosedHandler?.(tabId);
+}
+
+export function handleTabReloaded(tabId: number): void {
+  if (!isTabAttached(tabId)) return;
+  tabReloadedHandler?.(tabId);
+}
+
 /**
  * Set up tab event listeners
  */
@@ -698,7 +722,6 @@ export function setupTabListeners(): void {
       
       // Reset PageContextManager
       try {
-        const { resetPageContext } = await import('../agent/PageContextManager');
         resetPageContext();
         logWithTimestamp(`Reset PageContextManager for closed tab ${tabId}`);
       } catch (error) {
@@ -835,7 +858,7 @@ export async function forceResetPlaywright(): Promise<boolean> {
   try {
     logWithTimestamp('Force resetting Playwright instance');
     
-    // Reset BrowserBee-specific state
+    // Reset InfinitAgent-specific state
     currentTabId = null;
     
     // IMPORTANT: Clear the attachedTabIds set to ensure tabs are properly marked as detached

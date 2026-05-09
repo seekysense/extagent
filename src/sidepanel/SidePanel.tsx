@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ConfigManager } from '../background/configManager';
+import { useLang } from '../i18n';
 import { TokenTrackingService } from '../tracking/tokenTrackingService';
 import { ApprovalRequest } from './components/ApprovalRequest';
 import { MessageDisplay } from './components/MessageDisplay';
@@ -7,12 +8,16 @@ import { OutputHeader } from './components/OutputHeader';
 import { PromptForm } from './components/PromptForm';
 import { ProviderSelector } from './components/ProviderSelector';
 import { TabStatusBar } from './components/TabStatusBar';
-import { TokenUsageDisplay } from './components/TokenUsageDisplay';
 import { useChromeMessaging } from './hooks/useChromeMessaging';
 import { useMessageManagement } from './hooks/useMessageManagement';
 import { useTabManagement } from './hooks/useTabManagement';
+import { QuickActions } from './components/QuickActions';
+import { TaskHistory } from './components/TaskHistory';
+import { useTaskHistory } from './hooks/useTaskHistory';
 
 export function SidePanel() {
+  const { t } = useLang();
+
   // State for tab status
   const [tabStatus, setTabStatus] = useState<'attached' | 'detached' | 'unknown' | 'running' | 'idle' | 'error'>('unknown');
 
@@ -37,16 +42,29 @@ export function SidePanel() {
 
     checkProviders();
 
-    // Listen for provider configuration changes
+    // Listen for storage changes directly — more reliable than runtime messages in MV3
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'sync' && (
+        'openaiCompatibleApiKey' in changes ||
+        'openaiCompatibleBaseUrl' in changes ||
+        'modelProfiles' in changes
+      )) {
+        checkProviders();
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
+    // Keep runtime message listener as fallback
     const handleMessage = (message: any) => {
       if (message.action === 'providerConfigChanged') {
         checkProviders();
       }
     };
-
     chrome.runtime.onMessage.addListener(handleMessage);
 
     return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
       chrome.runtime.onMessage.removeListener(handleMessage);
     };
   }, []);
@@ -75,6 +93,8 @@ export function SidePanel() {
     clearMessages,
     currentSegmentId
   } = useMessageManagement();
+
+  const { history: taskHistory, addTask, clearHistory: clearTaskHistory } = useTaskHistory();
 
   // Heartbeat interval for checking agent status
   useEffect(() => {
@@ -122,7 +142,15 @@ export function SidePanel() {
     tabId,
     windowId,
     onUpdateOutput: (content) => {
-      addMessage({ ...content, isComplete: true });
+      const msg: Parameters<typeof addMessage>[0] = { ...content, isComplete: true };
+      if (content.type === 'llm') {
+        try {
+          msg.structuredResult = JSON.parse(content.content);
+        } catch {
+          // not JSON — no structured result
+        }
+      }
+      addMessage(msg);
     },
     onUpdateStreamingChunk: (content) => {
       updateStreamingChunk(content.content);
@@ -214,6 +242,7 @@ export function SidePanel() {
 
   // Handle form submission
   const handleSubmit = async (prompt: string) => {
+    addTask(prompt);
     setIsProcessing(true);
     // Update the tab status to running
     setTabStatus('running');
@@ -231,6 +260,20 @@ export function SidePanel() {
       setTabStatus('error');
     }
   };
+
+  // Ref so the executeSkillPrompt listener always calls the latest handleSubmit
+  const handleSubmitRef = useRef(handleSubmit);
+  useEffect(() => { handleSubmitRef.current = handleSubmit; });
+
+  useEffect(() => {
+    const listener = (message: any) => {
+      if (message.action === 'executeSkillPrompt' && message.skillTitle) {
+        handleSubmitRef.current(`esegui la skill "${message.skillTitle}"`);
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
 
   // Handle cancellation - also reject any pending approval requests
   const handleCancel = () => {
@@ -259,6 +302,7 @@ export function SidePanel() {
   const handleClearHistory = () => {
     clearMessages();
     clearHistory();
+    clearTaskHistory();
 
     // Reset token tracking
     const tokenTracker = TokenTrackingService.getInstance();
@@ -286,7 +330,7 @@ export function SidePanel() {
     <div className="flex flex-col h-screen p-4 bg-base-200">
       <header className="mb-4">
         <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold text-primary">BrowserBee 🐝</h1>
+          <h1 className="text-xl font-bold text-primary">{t('app.title')}</h1>
         <TabStatusBar
           tabId={tabId}
           tabTitle={tabTitle}
@@ -294,7 +338,7 @@ export function SidePanel() {
         />
       </div>
       <p className="text-sm text-gray-600 mt-2">
-          What can I do for you today?
+          {t('sidepanel.tagline')}
         </p>
       </header>
 
@@ -320,9 +364,6 @@ export function SidePanel() {
             </div>
           </div>
 
-          {/* Add Token Usage Display */}
-          <TokenUsageDisplay />
-
           {/* Display approval requests */}
           {approvalRequests.map(req => (
             <ApprovalRequest
@@ -336,26 +377,31 @@ export function SidePanel() {
             />
           ))}
 
+          <TaskHistory history={taskHistory} onRerun={handleSubmit} />
           <PromptForm
             onSubmit={handleSubmit}
             onCancel={handleCancel}
             isProcessing={isProcessing}
             tabStatus={tabStatus}
           />
+          <QuickActions
+            executePrompt={executePrompt}
+            isProcessing={isProcessing}
+          />
           <ProviderSelector isProcessing={isProcessing} />
         </>
       ) : (
         <div className="flex flex-col flex-grow items-center justify-center">
           <div className="text-center mb-6">
-            <h2 className="text-xl font-semibold mb-2">No LLM provider configured</h2>
+            <h2 className="text-xl font-semibold mb-2">{t('sidepanel.noProvider')}</h2>
             <p className="text-gray-600 mb-4">
-              You need to configure an LLM provider before you can use BrowserBee.
+              {t('sidepanel.noProviderDesc')}
             </p>
             <button
               onClick={navigateToOptions}
               className="btn btn-primary"
             >
-              Configure Providers
+              {t('sidepanel.configureProvider')}
             </button>
           </div>
         </div>

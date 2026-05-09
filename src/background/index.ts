@@ -7,7 +7,7 @@ import { logWithTimestamp } from './utils';
  * Initialize the extension
  */
 function initializeExtension(): void {
-  logWithTimestamp('BrowserBee 🐝 extension initialized');
+  logWithTimestamp('InfinitAgent extension initialized');
 
   // Set up message listeners
   setupMessageListeners();
@@ -31,15 +31,10 @@ function setupEventListeners(): void {
     if (areaName === 'sync') {
       // Check if any provider configuration has changed
       const providerConfigChanged = Object.keys(changes).some(key =>
-        key === 'provider' ||
-        key === 'anthropicApiKey' ||
-        key === 'openaiApiKey' ||
-        key === 'geminiApiKey' ||
-        key === 'ollamaApiKey' ||
-        key === 'anthropicBaseUrl' ||
-        key === 'openaiBaseUrl' ||
-        key === 'geminiBaseUrl' ||
-        key === 'ollamaBaseUrl'
+        key === 'openaiCompatibleApiKey' ||
+        key === 'openaiCompatibleBaseUrl' ||
+        key === 'openaiCompatibleModelId' ||
+        key === 'openaiCompatibleModels'
       );
 
       if (providerConfigChanged) {
@@ -55,7 +50,7 @@ function setupEventListeners(): void {
 
   // Open options page when the extension is first installed
   chrome.runtime.onInstalled.addListener((details) => {
-    logWithTimestamp('BrowserBee 🐝 extension installed');
+    logWithTimestamp('InfinitAgent extension installed');
 
     if (details.reason === 'install') {
       chrome.runtime.openOptionsPage();
@@ -114,7 +109,7 @@ function setupEventListeners(): void {
       // Delete the memory database on uninstall/disable
       try {
         logWithTimestamp('Deleting memory database');
-        const request = indexedDB.deleteDatabase('browserbee-memories');
+        const request = indexedDB.deleteDatabase('infinit-agent-memories');
 
         request.onsuccess = () => {
           logWithTimestamp('Memory database deleted successfully');
@@ -141,7 +136,7 @@ function setupEventListeners(): void {
       // Delete the memory database before update
       try {
         logWithTimestamp('Deleting memory database before update');
-        const request = indexedDB.deleteDatabase('browserbee-memories');
+        const request = indexedDB.deleteDatabase('infinit-agent-memories');
 
         request.onsuccess = () => {
           logWithTimestamp('Memory database deleted successfully before update');

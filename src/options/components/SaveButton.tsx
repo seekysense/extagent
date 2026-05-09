@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLang } from '../../i18n';
 
 interface SaveButtonProps {
   isSaving: boolean;
@@ -8,16 +9,18 @@ interface SaveButtonProps {
 }
 
 export function SaveButton({ isSaving, saveStatus, handleSave, isDisabled }: SaveButtonProps) {
+  const { t } = useLang();
+
   return (
     <>
-      <button 
-        onClick={handleSave} 
+      <button
+        onClick={handleSave}
         disabled={isSaving || isDisabled}
         className="btn btn-primary"
       >
-        {isSaving ? 'Saving...' : 'Save Settings'}
+        {isSaving ? t('save.saving') : t('save.save')}
       </button>
-      
+
       {saveStatus && <div className="alert alert-success mt-4">{saveStatus}</div>}
     </>
   );

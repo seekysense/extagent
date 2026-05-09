@@ -1,195 +1,208 @@
-import { AnthropicProvider } from '../models/providers/anthropic';
-import { GeminiProvider } from '../models/providers/gemini';
-import { OllamaProvider, OllamaProviderOptions } from '../models/providers/ollama';
-import { OpenAIProvider } from '../models/providers/openai';
 import { OpenAICompatibleProvider } from '../models/providers/openai-compatible';
+import { AgentFunction, FunctionMapping, ModelProfile } from '../models/providers/types';
 
 export interface ProviderConfig {
-  provider: 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'openai-compatible';
+  provider: 'openai-compatible';
   apiKey: string;
   apiModelId?: string;
   baseUrl?: string;
-  thinkingBudgetTokens?: number;
-  // openai-compatible only
   openaiCompatibleModels?: Array<{ id: string; name: string; isReasoningModel?: boolean }>;
+}
+
+export interface TestConnectionResult {
+  ok: boolean;
+  error?: string;
 }
 
 export class ConfigManager {
   private static instance: ConfigManager;
-  
+
   private constructor() {}
-  
+
   static getInstance(): ConfigManager {
     if (!ConfigManager.instance) {
       ConfigManager.instance = new ConfigManager();
     }
     return ConfigManager.instance;
   }
-  
+
   async getProviderConfig(): Promise<ProviderConfig> {
     const result = await chrome.storage.sync.get({
-      provider: 'anthropic',
-      anthropicApiKey: '',
-      anthropicModelId: 'claude-3-7-sonnet-20250219',
-      anthropicBaseUrl: '',
-      openaiApiKey: '',
-      openaiModelId: 'gpt-4o',
-      openaiBaseUrl: '',
-      geminiApiKey: '',
-      geminiModelId: 'gemini-1.5-pro',
-      geminiBaseUrl: '',
-      ollamaApiKey: '',
-      ollamaModelId: '',
-      ollamaBaseUrl: '',
-      thinkingBudgetTokens: 0,
-      // openai-compatible
       openaiCompatibleApiKey: '',
       openaiCompatibleModelId: '',
       openaiCompatibleBaseUrl: '',
       openaiCompatibleModels: [],
     });
-    
-    // Return provider-specific configuration
-    switch (result.provider) {
-      case 'anthropic':
-        return {
-          provider: 'anthropic',
-          apiKey: result.anthropicApiKey,
-          apiModelId: result.anthropicModelId,
-          baseUrl: result.anthropicBaseUrl,
-          thinkingBudgetTokens: result.thinkingBudgetTokens,
-        };
-      case 'openai':
-        return {
-          provider: 'openai',
-          apiKey: result.openaiApiKey,
-          apiModelId: result.openaiModelId,
-          baseUrl: result.openaiBaseUrl,
-        };
-      case 'gemini':
-        return {
-          provider: 'gemini',
-          apiKey: result.geminiApiKey,
-          apiModelId: result.geminiModelId,
-          baseUrl: result.geminiBaseUrl,
-        };
-      case 'ollama':
-        return {
-          provider: 'ollama',
-          apiKey: result.ollamaApiKey,
-          apiModelId: result.ollamaModelId,
-          baseUrl: result.ollamaBaseUrl,
-        };
-      case 'openai-compatible':
-        return {
-          provider: 'openai-compatible',
-          apiKey: result.openaiCompatibleApiKey,
-          apiModelId: result.openaiCompatibleModelId,
-          baseUrl: result.openaiCompatibleBaseUrl,
-          openaiCompatibleModels: result.openaiCompatibleModels || [],
-        };
-      default:
-        throw new Error(`Provider ${result.provider} not supported`);
-    }
+
+    return {
+      provider: 'openai-compatible',
+      apiKey: result.openaiCompatibleApiKey,
+      apiModelId: result.openaiCompatibleModelId,
+      baseUrl: result.openaiCompatibleBaseUrl,
+      openaiCompatibleModels: result.openaiCompatibleModels || [],
+    };
   }
-  
+
   async saveProviderConfig(config: Partial<ProviderConfig>): Promise<void> {
-    // Save provider-specific configuration
     await chrome.storage.sync.set(config);
   }
-  
-  /**
-   * Get all providers that have API keys configured
-   */
+
   async getConfiguredProviders(): Promise<string[]> {
     const result = await chrome.storage.sync.get({
-      anthropicApiKey: '',
-      openaiApiKey: '',
-      geminiApiKey: '',
-      ollamaApiKey: '',
       openaiCompatibleApiKey: '',
-      openaiCompatibleModels: [],
+      openaiCompatibleBaseUrl: '',
     });
-    
-    const providers = [];
-    if (result.anthropicApiKey) providers.push('anthropic');
-    if (result.openaiApiKey) providers.push('openai');
-    if (result.geminiApiKey) providers.push('gemini');
-    
-    // For Ollama, check if the base URL is configured AND at least one model exists
-    const ollamaBaseUrl = await this.getOllamaBaseUrl();
-    const ollamaResult = await chrome.storage.sync.get({ ollamaCustomModels: [] });
-    if (ollamaBaseUrl && ollamaResult.ollamaCustomModels.length > 0) {
-      providers.push('ollama');
+
+    if (result.openaiCompatibleApiKey || result.openaiCompatibleBaseUrl) {
+      return ['openai-compatible'];
     }
-    
-    if (result.openaiCompatibleApiKey && (result.openaiCompatibleModels?.length > 0)) providers.push('openai-compatible');
-    
-    return providers;
+    return [];
   }
-  
-  /**
-   * Get available models for a specific provider
-   */
-  async getModelsForProvider(provider: string): Promise<{id: string, name: string}[]> {
-    switch (provider) {
-      case 'anthropic':
-        return AnthropicProvider.getAvailableModels();
-      case 'openai':
-        return OpenAIProvider.getAvailableModels();
-      case 'gemini':
-        return GeminiProvider.getAvailableModels();
-      case 'ollama': {
-        const result = await chrome.storage.sync.get({ ollamaCustomModels: [] });
-        const models = OllamaProvider.getAvailableModels({ ollamaCustomModels: result.ollamaCustomModels } as OllamaProviderOptions);
-        return models;
-      }
-      case 'openai-compatible': {
-        const result = await chrome.storage.sync.get({ openaiCompatibleModels: [] });
-        return OpenAICompatibleProvider.getAvailableModels({ openaiCompatibleModels: result.openaiCompatibleModels || [] } as any);
-      }
-      default:
-        return [];
+
+  async getModelsForProvider(provider: string): Promise<{ id: string; name: string }[]> {
+    if (provider !== 'openai-compatible') return [];
+    const result = await chrome.storage.sync.get({ openaiCompatibleModels: [] });
+    return OpenAICompatibleProvider.getAvailableModels({
+      openaiCompatibleModels: result.openaiCompatibleModels || [],
+    } as any);
+  }
+
+  async updateProviderAndModel(_provider: string, modelId: string): Promise<void> {
+    await chrome.storage.sync.set({
+      openaiCompatibleModelId: modelId,
+    });
+  }
+
+  // ── Model Profiles ────────────────────────────────────────────────────────
+
+  async getProfiles(): Promise<ModelProfile[]> {
+    const result = await chrome.storage.sync.get({ modelProfiles: [] });
+    return result.modelProfiles || [];
+  }
+
+  async saveProfiles(profiles: ModelProfile[]): Promise<void> {
+    await chrome.storage.sync.set({ modelProfiles: profiles });
+  }
+
+  async getDefaultProfileId(): Promise<string> {
+    const result = await chrome.storage.sync.get({ defaultProfileId: '' });
+    return result.defaultProfileId || '';
+  }
+
+  async setDefaultProfileId(id: string): Promise<void> {
+    await chrome.storage.sync.set({ defaultProfileId: id });
+  }
+
+  async getActiveProfile(): Promise<ModelProfile | null> {
+    const [profiles, defaultId] = await Promise.all([
+      this.getProfiles(),
+      this.getDefaultProfileId(),
+    ]);
+    if (!profiles.length) return null;
+    return profiles.find(p => p.id === defaultId) ?? profiles[0];
+  }
+
+  // ── Function → Profile Routing ───────────────────────────────────────────
+
+  async getFunctionMappings(): Promise<FunctionMapping[]> {
+    const result = await chrome.storage.sync.get({ functionMappings: [] });
+    return result.functionMappings || [];
+  }
+
+  async setFunctionMapping(fn: AgentFunction, profileId: string): Promise<void> {
+    const mappings = await this.getFunctionMappings();
+    const idx = mappings.findIndex(m => m.function === fn);
+    if (idx >= 0) {
+      mappings[idx] = { function: fn, profileId };
+    } else {
+      mappings.push({ function: fn, profileId });
     }
+    await chrome.storage.sync.set({ functionMappings: mappings });
   }
-  
-  /**
-   * Get the Ollama base URL from storage
-   */
-  async getOllamaBaseUrl(): Promise<string> {
-    const result = await chrome.storage.sync.get({
-      ollamaBaseUrl: '',
-    });
-    return result.ollamaBaseUrl;
+
+  async resolveProfileForFunction(fn: AgentFunction): Promise<ModelProfile | null> {
+    const [mappings, profiles] = await Promise.all([
+      this.getFunctionMappings(),
+      this.getProfiles(),
+    ]);
+    const mapping = mappings.find(m => m.function === fn);
+    if (mapping) {
+      const profile = profiles.find(p => p.id === mapping.profileId);
+      if (profile) return profile;
+    }
+    // Fallback: active (default) profile
+    return this.getActiveProfile();
   }
-  
-  async updateProviderAndModel(provider: string, modelId: string): Promise<void> {
-    // Get current config
-    const result = await chrome.storage.sync.get({
-      provider: 'anthropic',
-      anthropicModelId: 'claude-3-7-sonnet-20250219',
-      openaiModelId: 'gpt-4o',
-      geminiModelId: 'gemini-1.5-pro',
-      ollamaModelId: 'llama3.1',
-    });
-    
-    // Update provider
-    await chrome.storage.sync.set({ provider });
-    
-    // Update model ID for the specific provider
-    switch (provider) {
-      case 'anthropic':
-        await chrome.storage.sync.set({ anthropicModelId: modelId });
-        break;
-      case 'openai':
-        await chrome.storage.sync.set({ openaiModelId: modelId });
-        break;
-      case 'gemini':
-        await chrome.storage.sync.set({ geminiModelId: modelId });
-        break;
-      case 'ollama':
-        await chrome.storage.sync.set({ ollamaModelId: modelId });
-        break;
+
+  // ── Memory ────────────────────────────────────────────────────────────────
+
+  async getMemoryEnabled(): Promise<boolean> {
+    const result = await chrome.storage.sync.get({ memoryEnabled: true });
+    return result.memoryEnabled !== false;
+  }
+
+  async setMemoryEnabled(enabled: boolean): Promise<void> {
+    await chrome.storage.sync.set({ memoryEnabled: enabled });
+  }
+
+  // ── Custom System Prompt ─────────────────────────────────────────────────
+
+  async getCustomSystemPrompt(): Promise<string> {
+    const result = await chrome.storage.local.get({ customSystemPrompt: '' });
+    return result.customSystemPrompt || '';
+  }
+
+  async setCustomSystemPrompt(prompt: string): Promise<void> {
+    await chrome.storage.local.set({ customSystemPrompt: prompt });
+  }
+
+  // ── Tool Timeouts ─────────────────────────────────────────────────────────
+
+  async getToolTimeoutMs(): Promise<number> {
+    const result = await chrome.storage.sync.get({ toolTimeoutMs: 600_000 });
+    return result.toolTimeoutMs || 600_000;
+  }
+
+  async getNavigationTimeoutMs(): Promise<number> {
+    const result = await chrome.storage.sync.get({ navigationTimeoutMs: 600_000 });
+    return result.navigationTimeoutMs || 600_000;
+  }
+
+  // ── Test Connection ───────────────────────────────────────────────────────
+
+  async testConnection(
+    baseUrl: string,
+    apiKey: string,
+    modelId: string
+  ): Promise<TestConnectionResult> {
+    const url = baseUrl.replace(/\/$/, '') + '/chat/completions';
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelId,
+          messages: [{ role: 'user', content: 'ping' }],
+          max_tokens: 1,
+          stream: false,
+        }),
+      });
+
+      if (response.status >= 500) {
+        const text = await response.text().catch(() => '');
+        return { ok: false, error: `Server error ${response.status}: ${text.slice(0, 200)}` };
+      }
+
+      // 2xx or 4xx (model error, auth error) still means the server is reachable
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 }

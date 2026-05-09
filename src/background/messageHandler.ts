@@ -4,6 +4,7 @@ import { executePrompt } from './agentController';
 import { cancelExecution } from './agentController';
 import { clearMessageHistory } from './agentController';
 import { initializeAgent } from './agentController';
+import { RecordingManager } from './recordingManager';
 import { triggerReflection } from './reflectionController';
 import { attachToTab, getTabState, getWindowForTab, forceResetPlaywright } from './tabManager';
 import { BackgroundMessage } from './types';
@@ -117,6 +118,55 @@ export function handleMessage(
           });
         return true; // Keep the message channel open for async response
 
+      case 'startRecordingCapture':
+        handleStartRecordingCapture(message, sendResponse)
+          .catch(error => {
+            sendResponse({ success: false, error: handleError(error, 'starting recording') });
+          });
+        return true;
+
+      case 'stopRecordingCapture':
+        handleStopRecordingCapture(message, sendResponse);
+        return true;
+
+      case 'saveRecording':
+        handleSaveRecording(message, sendResponse)
+          .catch(error => {
+            sendResponse({ success: false, error: handleError(error, 'saving recording') });
+          });
+        return true;
+
+      case 'cancelRecording':
+        handleCancelRecording(message, sendResponse)
+          .catch(error => {
+            sendResponse({ success: false, error: handleError(error, 'cancelling recording') });
+          });
+        return true;
+
+      case 'deleteRecording':
+        handleDeleteRecording(message, sendResponse)
+          .catch(error => {
+            sendResponse({ success: false, error: handleError(error, 'deleting recording') });
+          });
+        return true;
+
+      case 'recordingStep':
+        handleRecordingStep(message, sendResponse)
+          .catch(error => {
+            sendResponse({ success: false, error: handleError(error, 'adding recording step') });
+          });
+        return true;
+
+      case 'playRecording':
+        sendResponse({ success: true });
+        return true;
+
+      case 'executeSkillPrompt':
+        // Re-broadcast so the sidepanel can pick it up and call handleSubmit
+        chrome.runtime.sendMessage({ action: 'executeSkillPrompt', skillTitle: message.skillTitle });
+        sendResponse({ success: true });
+        return true;
+
       default:
         // This should never happen due to the type guard, but TypeScript requires it
         logWithTimestamp(`Unhandled message action: ${(message as any).action}`, 'warn');
@@ -162,8 +212,16 @@ function isBackgroundMessage(message: any): message is BackgroundMessage {
       message.action === 'pageConsole' ||
       message.action === 'pageError' ||
       message.action === 'forceResetPlaywright' ||
-      message.action === 'requestApproval' ||  // Add support for request approval messages
-      message.action === 'checkAgentStatus'  // Add support for agent status check
+      message.action === 'requestApproval' ||
+      message.action === 'checkAgentStatus' ||
+      message.action === 'startRecordingCapture' ||
+      message.action === 'stopRecordingCapture' ||
+      message.action === 'saveRecording' ||
+      message.action === 'cancelRecording' ||
+      message.action === 'deleteRecording' ||
+      message.action === 'recordingStep' ||
+      message.action === 'playRecording' ||
+      message.action === 'executeSkillPrompt'
     )
   );
 }
@@ -447,6 +505,77 @@ async function handleCheckAgentStatus(
     logWithTimestamp(`Error checking agent status: ${errorMessage}`, 'error');
     sendResponse({ success: false, error: errorMessage });
   }
+}
+
+async function handleStartRecordingCapture(
+  message: Extract<BackgroundMessage, { action: 'startRecordingCapture' }>,
+  sendResponse: (response?: any) => void
+): Promise<void> {
+  const manager = RecordingManager.getInstance();
+  await manager.startRecording(message.name);
+  // Tell the active tab's content script to start capturing
+  try {
+    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tabs[0]?.id) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'startRecordingCapture' });
+    }
+  } catch {
+    // content script may not be injected yet — ignore
+  }
+  sendResponse({ success: true });
+}
+
+function handleStopRecordingCapture(
+  _message: Extract<BackgroundMessage, { action: 'stopRecordingCapture' }>,
+  sendResponse: (response?: any) => void
+): void {
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    if (tabs[0]?.id) {
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'stopRecordingCapture' });
+    }
+  });
+  sendResponse({ success: true });
+}
+
+async function handleSaveRecording(
+  message: Extract<BackgroundMessage, { action: 'saveRecording' }>,
+  sendResponse: (response?: any) => void
+): Promise<void> {
+  const manager = RecordingManager.getInstance();
+  const recording = await manager.stopRecording(message.description ?? '');
+  sendResponse({ success: true, recording });
+}
+
+async function handleCancelRecording(
+  _message: Extract<BackgroundMessage, { action: 'cancelRecording' }>,
+  sendResponse: (response?: any) => void
+): Promise<void> {
+  const manager = RecordingManager.getInstance();
+  await manager.cancelRecording();
+  sendResponse({ success: true });
+}
+
+async function handleDeleteRecording(
+  message: Extract<BackgroundMessage, { action: 'deleteRecording' }>,
+  sendResponse: (response?: any) => void
+): Promise<void> {
+  const manager = RecordingManager.getInstance();
+  await manager.deleteRecording(message.name);
+  sendResponse({ success: true });
+}
+
+async function handleRecordingStep(
+  message: Extract<BackgroundMessage, { action: 'recordingStep' }>,
+  sendResponse: (response?: any) => void
+): Promise<void> {
+  const manager = RecordingManager.getInstance();
+  const isActive = await manager.isRecording();
+  if (isActive) {
+    await manager.addStep(message.step as any);
+    // Notify sidepanel of new step
+    chrome.runtime.sendMessage({ action: 'recordingStepAdded' });
+  }
+  sendResponse({ success: true });
 }
 
 /**

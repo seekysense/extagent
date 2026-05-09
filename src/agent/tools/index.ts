@@ -1,4 +1,9 @@
 import type { Page } from "playwright-crx";
+import { LLMProvider } from "../../models/providers/types";
+import { playAutomation } from "./automationTools";
+import { extractWithSchema, paginateAndCollect } from "./extractionTools";
+import { fillFormFromData } from "./formTools";
+import { useSkill } from "./skillTools";
 
 // Import all tools from their respective modules
 import { 
@@ -56,6 +61,9 @@ import {
 } from "./tabTools";
 import { ToolFactory } from "./types";
 
+// Re-export extraction, form, automation, and skill tools for direct use
+export { extractWithSchema, paginateAndCollect, fillFormFromData, playAutomation, useSkill };
+
 // Export all tools
 export {
   // Navigation tools
@@ -106,7 +114,7 @@ export {
 };
 
 // Function to get all tools as an array
-export function getAllTools(page: Page) {
+export function getAllTools(page: Page, llmProvider?: LLMProvider) {
   const tools = [
     // Navigation tools
     browserNavigate(page),
@@ -152,8 +160,22 @@ export function getAllTools(page: Page) {
     lookupMemories(page),
     getAllMemories(page),
     deleteMemory(page),
-    clearAllMemories(page)
+    clearAllMemories(page),
+
+    // Form tools
+    fillFormFromData(page),
+
+    // Automation tools
+    playAutomation(page),
+
+    // Skill tools
+    useSkill(page),
   ];
-  
+
+  if (llmProvider) {
+    tools.push(extractWithSchema(page, llmProvider));
+    tools.push(paginateAndCollect(page, llmProvider));
+  }
+
   return tools;
 }

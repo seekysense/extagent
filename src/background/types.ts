@@ -1,8 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { BrowserAgent } from "../agent/AgentCore";
 
 // Provider types
-export type ProviderType = 'anthropic' | 'openai' | 'gemini' | 'ollama' | 'openai-compatible';
+export type ProviderType = 'openai-compatible';
 
 // Agent status types
 export enum AgentStatus {
@@ -202,7 +201,52 @@ export interface AgentStatusUpdateMessage {
   windowId?: number;
 }
 
-export type BackgroundMessage = 
+// Recording message types
+export interface StartRecordingCaptureMessage {
+  action: 'startRecordingCapture';
+  name: string;
+}
+
+export interface StopRecordingCaptureMessage {
+  action: 'stopRecordingCapture';
+}
+
+export interface SaveRecordingMessage {
+  action: 'saveRecording';
+  description?: string;
+}
+
+export interface CancelRecordingMessage {
+  action: 'cancelRecording';
+}
+
+export interface DeleteRecordingMessage {
+  action: 'deleteRecording';
+  name: string;
+}
+
+export interface RecordingStepMessage {
+  action: 'recordingStep';
+  step: {
+    type: string;
+    selector?: string;
+    text?: string;
+    url?: string;
+    description?: string;
+  };
+}
+
+export interface PlayRecordingMessage {
+  action: 'playRecording';
+  name: string;
+}
+
+export interface ExecuteSkillPromptMessage {
+  action: 'executeSkillPrompt';
+  skillTitle: string;
+}
+
+export type BackgroundMessage =
   | ExecutePromptMessage
   | CancelExecutionMessage
   | ClearHistoryMessage
@@ -216,7 +260,15 @@ export type BackgroundMessage =
   | ProviderConfigChangedMessage
   | ForceResetPlaywrightMessage
   | RequestApprovalMessage
-  | CheckAgentStatusMessage;
+  | CheckAgentStatusMessage
+  | StartRecordingCaptureMessage
+  | StopRecordingCaptureMessage
+  | SaveRecordingMessage
+  | CancelRecordingMessage
+  | DeleteRecordingMessage
+  | RecordingStepMessage
+  | PlayRecordingMessage
+  | ExecuteSkillPromptMessage;
 
 // New message types for enhanced tab management
 export interface TabStatusChangedMessage {

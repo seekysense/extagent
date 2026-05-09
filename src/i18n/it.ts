@@ -1,0 +1,272 @@
+export const it: Record<string, string> = {
+  'app.title': 'InfinitAgent',
+
+  // Side panel
+  'sidepanel.tagline': 'Cosa posso fare per te oggi?',
+  'sidepanel.placeholder': 'Scrivi un messaggio...',
+  'sidepanel.placeholderDisconnected': 'Connessione al tab persa. Aggiorna il tab per continuare.',
+  'sidepanel.noProvider': 'Nessun provider LLM configurato',
+  'sidepanel.noProviderDesc': 'Devi configurare un provider LLM prima di usare InfinitAgent.',
+  'sidepanel.configureProvider': 'Configura Provider',
+  'sidepanel.noOutput': 'Nessun output',
+
+  // Agent status
+  'agent.idle': 'Inattivo',
+  'agent.thinking': 'Elaborazione...',
+  'agent.executing': 'Esecuzione...',
+  'agent.waitingApproval': 'In attesa di approvazione',
+  'agent.running': 'In esecuzione',
+  'agent.error': 'Errore agente',
+  'agent.unknown': 'Sconosciuto',
+
+  // Tab
+  'tab.connected': 'Connesso',
+  'tab.disconnected': 'Disconnesso',
+  'tab.attach': 'Aggancia al tab corrente',
+
+  // Actions
+  'action.stop': 'Annulla',
+  'action.send': 'Esegui',
+  'action.clear': 'Cancella la cronologia e il contesto LLM',
+  'action.reflect': 'Rifletti e impara da questa sessione',
+  'action.refreshTab': 'Aggiorna tab per continuare',
+  'action.settings': 'Apri Impostazioni',
+  'action.help': 'Apri Aiuto',
+
+  // Approval
+  'approval.title': 'Approvazione Richiesta',
+  'approval.desc': "L'agente vuole eseguire un'azione critica:",
+  'approval.tool': 'Strumento:',
+  'approval.input': 'Input:',
+  'approval.reason': 'Motivo:',
+  'approval.approve': 'Approva',
+  'approval.deny': 'Rifiuta',
+
+  // Token usage
+  'token.usage': 'Token usati:',
+  'token.cost': 'Costo stimato:',
+
+  // Screenshot
+  'screenshot.label': 'Screenshot acquisito:',
+  'screenshot.alt': 'Screenshot',
+
+  // Output
+  'output.title': 'Output',
+
+  // Options tabs
+  'options.tabs.general': 'Generale',
+  'options.tabs.llm': 'Configurazione LLM',
+  'options.tabs.memory': 'Memoria',
+  'options.saved': 'Impostazioni salvate!',
+
+  // General tab
+  'general.gettingStarted': '🚀 Inizia',
+  'general.steps.intro': 'Segui questi semplici passi per iniziare a usare InfinitAgent:',
+  'general.steps.1.title': '1. Ottieni una API Key',
+  'general.steps.1.desc': 'Ottieni una API key dal tuo provider LLM OpenAI-compatibile:',
+  'general.steps.2.title': '2. Configura InfinitAgent',
+  'general.steps.2.desc': 'Vai alla tab Configurazione LLM e:',
+  'general.steps.2.a': 'Seleziona il provider preferito',
+  'general.steps.2.b': 'Inserisci la tua API key',
+  'general.steps.2.c': 'Clicca Salva Impostazioni',
+  'general.steps.3.title': '3. Esegui il tuo primo task',
+  'general.steps.3.desc': 'Prova questo esempio per iniziare:',
+  'general.steps.3.a': 'Apri una nuova tab e vai su google.com',
+  'general.steps.3.b': "Clicca l'icona InfinitAgent o premi Alt+Shift+E",
+  'general.steps.3.c': '"Cerca il meteo a Parigi"',
+  'general.steps.3.d': 'Premi Invio e guarda InfinitAgent lavorare!',
+  'general.tips.title': '💡 Consigli Pro',
+  'general.tips.1': 'Tieni InfinitAgent collegato: Lascialo connesso a un tab per tutta la sessione per le migliori prestazioni',
+  'general.tips.2': 'Riaggancia se necessario: Se chiudi il tab collegato, usa il pulsante reattach per riconnetterti',
+  'general.tips.3': "Uno per finestra: Puoi avviare un'istanza InfinitAgent per finestra Chrome",
+  'general.tips.4': "Limitazioni tab: InfinitAgent non può collegarsi a nuovi tab o pagine chrome://",
+  'general.needHelp': 'Hai bisogno di aiuto?',
+  'general.joinDiscord': 'Unisciti alla Community Discord',
+  'general.discordDesc': 'Chiedi aiuto, condividi consigli e connettiti con altri utenti InfinitAgent',
+  'general.language': 'Lingua',
+  'general.language.it': 'Italiano',
+  'general.language.en': 'English',
+  'general.customPrompt.title': 'System Prompt personalizzato',
+  'general.customPrompt.desc': 'Lascia vuoto per usare il prompt di default. Il prompt personalizzato sovrascrive quello di default senza riavviare l\'estensione.',
+  'general.customPrompt.active': 'Prompt personalizzato attivo',
+  'general.customPrompt.placeholder': 'Incolla qui il tuo system prompt personalizzato...',
+  'general.customPrompt.save': 'Salva prompt',
+  'general.customPrompt.reset': 'Ripristina default',
+
+  // Quick actions
+  'quickactions.smartPaste': 'Smart Paste',
+  'quickactions.smartExtract': 'Smart Extract',
+  'quickactions.automate': 'Automate',
+  'quickactions.pasteHint': 'Incolla qui le informazioni da inserire nel form...',
+  'quickactions.compila': 'Compila',
+  'quickactions.analyzeHint': 'Analisi pagina in corso...',
+  'quickactions.extractNow': 'Estrai',
+  'quickactions.format.json': 'JSON',
+  'quickactions.format.csv': 'CSV',
+  'quickactions.multipage': 'Multi-pagina',
+  'quickactions.proposedFields': 'Campi rilevati',
+
+  // About
+  'about.title': 'Informazioni',
+  'about.desc1': "InfinitAgent è un'estensione Chrome che ti permette di controllare il browser con il linguaggio naturale. Usa un backend LLM OpenAI-compatibile per interpretare le istruzioni e Playwright per eseguirle.",
+  'about.desc2': "Per usare l'estensione, clicca sull'icona per aprire il pannello laterale, poi inserisci le tue istruzioni nel campo e premi Invio.",
+
+  // LLM Config
+  'llm.title': 'Configurazione Endpoint LLM',
+  'llm.desc': "Configura l'endpoint OpenAI-compatibile. La tua API key è salvata localmente nel browser.",
+
+  // Provider config
+  'provider.title': 'Configurazione Provider LLM',
+  'provider.desc': "Configura il tuo endpoint OpenAI-compatibile e le impostazioni API. La tua API key è salvata in modo sicuro nel browser.",
+  'provider.selector.label': 'Provider LLM:',
+  'provider.openaiCompatible': 'Endpoint OpenAI-Compatibile',
+
+  // OpenAI compatible settings
+  'openai.settings.title': 'Impostazioni OpenAI Compatibile',
+  'openai.apiKey': 'API Key:',
+  'openai.apiKeyPlaceholder': 'API key (opzionale se endpoint locale)',
+  'openai.baseUrl': 'Base URL:',
+  'openai.baseUrlPlaceholder': 'es. http://localhost:8000/v1',
+  'openai.testConnection': 'Testa connessione',
+  'openai.connectionOk': 'Connessione riuscita',
+  'openai.missingConfig': 'Inserisci API Key e Base URL',
+
+  // Profiles
+  'openai.profiles.title': 'Profili Modello',
+  'openai.profiles.empty': 'Nessun profilo configurato. Aggiungine uno.',
+  'openai.profiles.setDefault': 'Imposta come default',
+  'openai.profiles.default': 'DEFAULT',
+  'openai.profiles.namePlaceholder': 'Nome profilo',
+  'openai.profiles.enableThinking': 'Abilita thinking (enable_thinking)',
+  'openai.profiles.thinkingBudget': 'Budget thinking (token)',
+  'openai.profiles.thinkingBudgetPlaceholder': 'es. 8192',
+  'openai.profiles.contextWindow': 'Context window',
+  'openai.profiles.temperature': 'Temperature',
+  'openai.profiles.temperatureForced': '(forzata 1)',
+  'openai.profiles.maxTokens': 'Max tokens',
+  'openai.profiles.thinkingOn': '⚡ Thinking ON',
+  'openai.profiles.thinkingOff': '🚀 Fast (no thinking)',
+  'openai.profiles.remove': 'Rimuovi',
+  'openai.profiles.new': 'NUOVO PROFILO',
+  'openai.profiles.name': 'Nome',
+  'openai.profiles.namePlaceholderNew': 'es. Qwen3 Thinking',
+  'openai.profiles.modelId': 'Model ID',
+  'openai.profiles.modelIdPlaceholder': 'es. qwen3-35b',
+  'openai.profiles.enableThinkingShort': 'Abilita thinking',
+  'openai.profiles.add': 'Aggiungi profilo',
+
+  // Routing
+  'openai.routing.title': 'Routing funzioni',
+  'openai.routing.desc': 'Associa ogni funzione a un profilo specifico. Se non impostato, viene usato il profilo default.',
+  'openai.routing.noProfiles': 'Aggiungi almeno un profilo per configurare il routing.',
+  'openai.routing.function': 'Funzione',
+  'openai.routing.profile': 'Profilo usato',
+  'openai.routing.useDefault': '— usa default —',
+
+  // Function names
+  'function.default': 'Default (fallback)',
+  'function.automation': 'Automazione browser',
+  'function.skill': 'Esecuzione skill',
+  'function.recording': 'Registrazione sequenza',
+  'function.smartPaste': 'Smart Paste',
+  'function.smartExtract': 'Smart Extract',
+  'function.observation': 'Osservazione / analisi',
+
+  // Memory
+  'memory.title': 'Gestione Memorie',
+  'memory.desc': 'InfinitAgent memorizza le interazioni riuscite con i siti web per migliorare le interazioni future. Puoi esportare queste memorie per backup o trasferirle su un altro dispositivo, e importarle in seguito.',
+  'memory.current': 'Memorie attuali:',
+  'memory.export': 'Esporta Memorie',
+  'memory.import': 'Importa Memorie',
+  'memory.exporting': 'Esportando...',
+  'memory.importing': 'Importando...',
+  'memory.exportSuccess': 'Esportate {count} memorie con successo!',
+  'memory.importSuccess': 'Importate {count} memorie con successo!',
+  'memory.invalidFormat': 'Formato non valido: atteso un array di memorie',
+  'memory.parseError': 'Errore nel parsing del file: {error}',
+  'memory.importError': 'Errore importando le memorie: {error}',
+  'memory.exportError': 'Errore esportando le memorie: {error}',
+  'memory.agentTitle': 'Memorie Agente',
+  'memory.validate': '✓ Valida',
+  'memory.validated': 'Validata',
+  'memory.validatedCount': '{validated} validate / {total} totali',
+  'memory.empty': 'Nessuna memoria salvata.',
+
+  // Skills
+  'skills.title': 'Gestione Skill',
+  'skills.desc': 'Le skill sono micro-programmi salvati come file .md che automatizzano sequenze di operazioni.',
+  'skills.new': '+ Nuova skill',
+  'skills.import': '⬆ Importa .md',
+  'skills.export': 'Esporta .md',
+  'skills.run': 'Esegui',
+  'skills.edit': 'Modifica',
+  'skills.delete': 'Elimina',
+  'skills.save': 'Salva',
+  'skills.cancel': 'Annulla',
+  'skills.empty': 'Nessuna skill salvata.',
+  'skills.steps': 'passi',
+  'skills.editorTitle': 'Titolo',
+  'skills.editorDesc': 'Descrizione',
+  'skills.editorBody': 'Corpo (Markdown)',
+  'skills.titlePlaceholder': 'es. Raccolta gare di appalto',
+  'skills.descPlaceholder': 'es. Estrae le gare pubbliche...',
+  'skills.bodyPlaceholder': '## Passi\n\n1. Primo passo\n   - `navigate: https://...`',
+  'options.tabs.skills': 'Skill',
+
+  // Recording
+  'recording.start': '● Avvia registrazione',
+  'recording.stop': '⏹ Ferma e salva',
+  'recording.save': 'Salva',
+  'recording.cancel': 'Annulla',
+  'recording.steps': 'azioni registrate',
+  'recording.namePlaceholder': 'Nome registrazione...',
+  'recording.descPlaceholder': 'Descrizione (opzionale)...',
+  'recording.play': 'Riproduci',
+  'recording.export': 'Esporta JSON',
+  'recording.delete': 'Elimina',
+  'recording.import': 'Importa JSON',
+
+  // Output & export
+  'output.copyJson': 'Copia JSON',
+  'output.downloadJson': 'Scarica JSON',
+  'output.exportCsv': 'Esporta CSV',
+  'output.copyTable': 'Copia tabella',
+
+  // Task history
+  'history.title': 'Cronologia',
+  'history.rerun': 'Riesegui',
+
+  // Domain profiles
+  'options.tabs.profiles': 'Profili Dominio',
+  'profile.title': 'Profili Dominio',
+  'profile.desc': 'I profili dominio arricchiscono il sistema prompt e forniscono hint per i portali specifici.',
+  'profile.new': '+ Nuovo profilo',
+  'profile.export': 'Esporta JSON',
+  'profile.import': 'Importa JSON',
+  'profile.empty': 'Nessun profilo configurato.',
+  'profile.save': 'Salva',
+  'profile.cancel': 'Annulla',
+  'profile.editorName': 'Nome',
+  'profile.editorPattern': 'Pattern dominio (glob)',
+  'profile.editorAddendum': 'Addendum sistema prompt',
+  'profile.editorHints': 'Hint selettori',
+  'profile.editorSchema': 'Schema JSON predefinito',
+  'profile.namePlaceholder': 'es. Portale Fornitori ACME',
+  'profile.patternPlaceholder': 'es. *.acme.it o gestionale.acme.it/fornitori*',
+  'profile.addendumPlaceholder': 'Testo aggiunto al sistema prompt quando si naviga su questo dominio...',
+  'profile.hintsPlaceholder': 'Hint sui selettori o struttura del portale...',
+  'profile.invalidJson': 'JSON non valido',
+
+  // Errors
+  'error.contextOverflow': 'Contesto troppo lungo: la conversazione è stata troncata per continuare.',
+  'error.llmTimeout': 'Richiesta LLM scaduta. Riprova.',
+  'error.maxStepsReached': 'Fermato: raggiunto il numero massimo di passi.',
+  'error.tabClosed': 'Il tab collegato è stato chiuso. Riaggancia per continuare.',
+  'error.tabReloaded': 'Il tab collegato è stato ricaricato.',
+  'error.cdpDisconnected': 'Connessione al browser persa. Riaggancia il tab.',
+  'error.restrictedPage': 'Questa pagina non è accessibile dall\'estensione.',
+
+  // Save
+  'save.saving': 'Salvataggio...',
+  'save.save': 'Salva Impostazioni',
+};

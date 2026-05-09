@@ -1,10 +1,9 @@
-import { DynamicTool } from "langchain/tools";
 import type { Page } from "playwright-crx";
 import { ToolFactory } from "./types";
 import { installDialogListener, lastDialog, resetDialog, withActivePage } from "./utils";
 
 export const browserClick: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_click",
     description:
       "Click an element. Input may be a CSS selector or literal text to match on the page.",
@@ -27,7 +26,7 @@ export const browserClick: ToolFactory = (page: Page) =>
   });
 
 export const browserType: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_type",
     description:
       "Type text. Format: selector|text (e.g. input[name=\"q\"]|hello)",
@@ -53,7 +52,7 @@ export const browserHandleDialog: ToolFactory = (page: Page) => {
   // Install dialog listener with the active page
   installDialogListener(page);
 
-  return new DynamicTool({
+  return ({
     name: "browser_handle_dialog",
     description:
       "Accept or dismiss the most recent alert/confirm/prompt dialog.\n" +

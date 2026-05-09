@@ -1,10 +1,9 @@
-import { DynamicTool } from "langchain/tools";
 import type { Page } from "playwright-crx";
 import { ToolFactory } from "./types";
 import { truncate, MAX_RETURN_CHARS, MAX_SCREENSHOT_CHARS, withActivePage, getCurrentTabId } from "./utils";
 
 export const browserGetTitle: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_get_title",
     description: "Return the current page title.",
     func: async () => {
@@ -40,7 +39,7 @@ export const browserGetTitle: ToolFactory = (page: Page) =>
   });
 
 export const browserSnapshotDom: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_snapshot_dom",
     description:
       "Capture DOM snapshot of the current page. Options (comma-separated):\n" +
@@ -268,7 +267,7 @@ function parseSnapshotOptions(input: string) {
 }
 
 export const browserQuery: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_query",
     description:
       "Return up to 10 outerHTML snippets for a CSS selector you provide.",
@@ -291,7 +290,7 @@ export const browserQuery: ToolFactory = (page: Page) =>
   });
 
 export const browserAccessibleTree: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_accessible_tree",
     description:
       "Return the AX accessibility tree JSON (default: interesting‑only). Input 'all' to dump full tree. Note: This tool can be useful when the DOM is too large to process.",
@@ -311,7 +310,7 @@ export const browserAccessibleTree: ToolFactory = (page: Page) =>
   });
 
 export const browserReadText: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_read_text",
     description:
       "Return all visible text on the page, concatenated in DOM order.",
@@ -347,7 +346,7 @@ export const browserReadText: ToolFactory = (page: Page) =>
   });
 
 export const browserScreenshot: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_screenshot",
     description:
       "Take a screenshot of the current page.\n\n" +

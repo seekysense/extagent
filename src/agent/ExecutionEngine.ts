@@ -1,4 +1,5 @@
-import { LLMProvider, StreamChunk } from "../models/providers/types";
+import { ConfigManager } from "../background/configManager";
+import { LLMProvider, ModelProfile, StreamChunk } from "../models/providers/types";
 import { TokenTrackingService } from "../tracking/tokenTrackingService";
 import { ErrorHandler } from "./ErrorHandler";
 import { MemoryManager } from "./MemoryManager";
@@ -7,9 +8,16 @@ import { trimHistory } from "./TokenManager";
 import { ToolManager } from "./ToolManager";
 import { requestApproval } from "./approvalManager";
 
+const NAVIGATION_TOOLS = new Set([
+  'browser_navigate',
+  'browser_wait_for_navigation',
+  'browser_navigate_back',
+  'browser_navigate_forward',
+]);
+
 // Constants
-const MAX_STEPS = 50;            // prevent infinite loops
-const MAX_OUTPUT_TOKENS = 1024;  // max tokens for LLM response
+const DEFAULT_MAX_STEPS = 100;   // prevent infinite loops
+const MAX_OUTPUT_TOKENS = 4000;  // max tokens for LLM response
 
 /**
  * Callback interface for execution
@@ -84,20 +92,53 @@ export class ExecutionEngine {
   private promptManager: PromptManager;
   private memoryManager: MemoryManager;
   private errorHandler: ErrorHandler;
+  private configManager: ConfigManager | null;
+  private activeProfile: ModelProfile | null = null;
+  private maxSteps = DEFAULT_MAX_STEPS;
+  private minMsBetweenCalls = 500;
+  private lastLlmCallTime = 0;
 
   constructor(
     llmProvider: LLMProvider,
     toolManager: ToolManager,
     promptManager: PromptManager,
     memoryManager: MemoryManager,
-    errorHandler: ErrorHandler
+    errorHandler: ErrorHandler,
+    configManager?: ConfigManager
   ) {
     this.llmProvider = llmProvider;
     this.toolManager = toolManager;
     this.promptManager = promptManager;
     this.memoryManager = memoryManager;
     this.errorHandler = errorHandler;
+    this.configManager = configManager ?? null;
   }
+
+  private async runWithTimeout(toolName: string, fn: () => Promise<string>): Promise<string> {
+    const isNav = NAVIGATION_TOOLS.has(toolName);
+    let ms: number;
+    if (this.configManager) {
+      ms = isNav
+        ? await this.configManager.getNavigationTimeoutMs()
+        : await this.configManager.getToolTimeoutMs();
+    } else {
+      ms = 600_000;
+    }
+    return Promise.race([
+      fn(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Tool "${toolName}" timed out after ${ms}ms`)), ms)
+      ),
+    ]);
+  }
+
+  setActiveProfile(profile: ModelProfile | null): void {
+    this.activeProfile = profile;
+  }
+
+  setMaxSteps(n: number): void { this.maxSteps = n; }
+  getMaxSteps(): number { return this.maxSteps; }
+  setMinMsBetweenCalls(ms: number): void { this.minMsBetweenCalls = ms; }
 
   /**
    * Main execution method with fallback support
@@ -223,14 +264,24 @@ export class ExecutionEngine {
     let streamBuffer = "";
     let toolCallDetected = false;
 
+    // Rate limiting: ensure minimum time between LLM calls
+    const now = Date.now();
+    const elapsed = now - this.lastLlmCallTime;
+    if (this.lastLlmCallTime > 0 && elapsed < this.minMsBetweenCalls) {
+      await new Promise(r => setTimeout(r, this.minMsBetweenCalls - elapsed));
+    }
+    this.lastLlmCallTime = Date.now();
+
     // Get tools from the ToolManager
     const tools = this.toolManager.getTools();
 
     // Use provider interface instead of direct Anthropic API
+    const systemPrompt = await this.promptManager.getSystemPrompt();
     const stream = this.llmProvider.createMessage(
-      this.promptManager.getSystemPrompt(),
+      systemPrompt,
       messages,
-      tools
+      tools,
+      this.activeProfile ?? undefined
     );
 
     // Track token usage
@@ -336,13 +387,32 @@ export class ExecutionEngine {
       let done = false;
       let step = 0;
 
-      while (!done && step++ < MAX_STEPS && !this.errorHandler.isExecutionCancelled()) {
+      while (!done && step++ < this.maxSteps && !this.errorHandler.isExecutionCancelled()) {
         try {
           // Check for cancellation before each major step
           if (this.errorHandler.isExecutionCancelled()) break;
 
           // ── 1. Call LLM with streaming ───────────────────────────────────────
-          const { accumulatedText } = await this.processLlmStream(messages, adaptedCallbacks);
+          // Retry up to 2 times on the same step before propagating the error
+          const MAX_STEP_RETRIES = 2;
+          let llmResult: Awaited<ReturnType<typeof this.processLlmStream>> | null = null;
+          for (let attempt = 0; attempt <= MAX_STEP_RETRIES; attempt++) {
+            try {
+              llmResult = await this.processLlmStream(messages, adaptedCallbacks);
+              break;
+            } catch (stepErr: any) {
+              if (attempt < MAX_STEP_RETRIES && !this.errorHandler.isExecutionCancelled()) {
+                const wait = 3000 * (attempt + 1);
+                adaptedCallbacks.onToolOutput(
+                  `⚠️ LLM error at step ${step}, retrying (${attempt + 1}/${MAX_STEP_RETRIES})…`
+                );
+                await new Promise(r => setTimeout(r, wait));
+              } else {
+                throw stepErr;
+              }
+            }
+          }
+          const { accumulatedText } = llmResult!;
 
           // Check for cancellation after LLM response
           if (this.errorHandler.isExecutionCancelled()) break;
@@ -531,7 +601,7 @@ The <requires_approval> tag is mandatory. Set it to "true" for purchases, data d
                 };
 
                 // Execute the tool with the context
-                result = await tool.func(toolInput, context);
+                result = await this.runWithTimeout(toolName, () => tool.func(toolInput, context));
               } else {
                 // User rejected, skip execution
                 result = "Action cancelled by user.";
@@ -544,7 +614,7 @@ The <requires_approval> tag is mandatory. Set it to "true" for purchases, data d
             }
           } else {
             // No approval required, execute the tool normally
-            result = await tool.func(toolInput);
+            result = await this.runWithTimeout(toolName, () => tool.func(toolInput));
           }
 
           // Signal that tool execution is complete
@@ -585,7 +655,8 @@ The <requires_approval> tag is mandatory. Set it to "true" for purchases, data d
             messages.push({ role: "user", content: `Tool result: ${result}` });
           }
 
-          messages = trimHistory(messages);
+          const { trimmed } = trimHistory(messages);
+          messages = trimmed;
         } catch (error) {
           // If an error occurs during execution, check if it was due to cancellation
           if (this.errorHandler.isExecutionCancelled()) break;
@@ -597,9 +668,9 @@ The <requires_approval> tag is mandatory. Set it to "true" for purchases, data d
         adaptedCallbacks.onLlmOutput(
           `\n\nExecution cancelled by user.`
         );
-      } else if (step >= MAX_STEPS) {
+      } else if (step >= this.maxSteps) {
         adaptedCallbacks.onLlmOutput(
-          `Stopped: exceeded maximum of ${MAX_STEPS} steps.`
+          `Stopped: exceeded maximum of ${this.maxSteps} steps.`
         );
       }
       adaptedCallbacks.onComplete();

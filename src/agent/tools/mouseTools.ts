@@ -1,10 +1,9 @@
-import { DynamicTool } from "langchain/tools";
 import type { Page } from "playwright-crx";
 import { ToolFactory } from "./types";
 import { withActivePage } from "./utils";
 
 export const browserMoveMouse: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_move_mouse",
     description:
       "Move the mouse cursor to absolute screen coordinates.\n" +
@@ -28,7 +27,7 @@ export const browserMoveMouse: ToolFactory = (page: Page) =>
   });
 
 export const browserClickXY: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_click_xy",
     description:
       "Left‑click at absolute coordinates.\n" +
@@ -52,7 +51,7 @@ export const browserClickXY: ToolFactory = (page: Page) =>
   });
 
 export const browserDrag: ToolFactory = (page: Page) =>
-  new DynamicTool({
+  ({
     name: "browser_drag",
     description:
       "Drag‑and‑drop with the left button.\n" +

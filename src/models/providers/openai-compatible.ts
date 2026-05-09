@@ -1,12 +1,25 @@
 import OpenAI from "openai";
-import { LLMProvider, ProviderOptions, ModelInfo, ApiStream, StreamChunk } from './types';
+import { LLMProvider, ModelInfo, ModelProfile, ProviderOptions, ApiStream } from './types';
+
+export function isContextOverflowError(error: unknown): boolean {
+  const e = error as any;
+  const msg = (e?.message ?? '').toLowerCase();
+  const status = e?.status ?? e?.statusCode ?? 0;
+  if (status === 413 || status === 422) return true;
+  if (status === 500 && (
+    msg.includes('context_length') || msg.includes('too many tokens') ||
+    msg.includes('maximum context') || msg.includes('request too large') ||
+    msg.includes('token limit')
+  )) return true;
+  return false;
+}
 
 export interface OpenAICompatibleModelInfo extends ModelInfo {
   isReasoning?: boolean;
 }
 
 export interface OpenAICompatibleProviderOptions extends ProviderOptions {
-  openaiCompatibleModels: Array<{ id: string; name: string; isReasoning?: boolean; }>;
+  openaiCompatibleModels?: Array<{ id: string; name: string; isReasoning?: boolean; }>;
 }
 
 export class OpenAICompatibleProvider implements LLMProvider {
@@ -17,77 +30,120 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private options: OpenAICompatibleProviderOptions;
   private client: OpenAI;
 
-  constructor(options: OpenAICompatibleProviderOptions) {
-    this.options = options;
+  constructor(options: ProviderOptions) {
+    this.options = options as OpenAICompatibleProviderOptions;
     this.client = new OpenAI({
       apiKey: this.options.apiKey,
       baseURL: this.options.baseUrl,
+      dangerouslyAllowBrowser: true,
+      timeout: 600_000, // 600s — needed for slow local LLMs
     });
   }
 
-  async *createMessage(systemPrompt: string, messages: any[], tools?: any[]): ApiStream {
-    const model = this.getModel();
-    const modelId = model.id;
-    const modelInfo = model.info;
-    const isReasoningModel = modelInfo.isReasoning;
+  getDefaultProfile(): ModelProfile | null {
+    const profiles = this.options.profiles ?? [];
+    if (!profiles.length) return null;
+    return profiles.find(p => p.id === this.options.defaultProfileId) ?? profiles[0];
+  }
 
-    // Filter out system instructions
+  private mapTools(tools?: any[]): any[] {
+    if (!tools?.length) return [];
+    return tools.map(tool => ({
+      type: "function",
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema ?? {
+          type: "object",
+          properties: {
+            input: { type: "string", description: "The input to the tool" },
+          },
+          required: ["input"],
+        },
+      },
+    }));
+  }
+
+  async *createMessage(
+    systemPrompt: string,
+    messages: any[],
+    tools?: any[],
+    profile?: ModelProfile
+  ): ApiStream {
+    const activeProfile = profile ?? this.getDefaultProfile();
+
+    // Resolve model ID: profile → legacy apiModelId → fallback
+    const modelId = activeProfile?.modelId ?? this.options.apiModelId ?? 'gpt-3.5-turbo';
+
     const filteredMessages = messages.filter(message =>
       !(message.role === "user" && typeof message.content === "string" && message.content.startsWith("[SYSTEM INSTRUCTION:"))
     );
 
-    // Convert to OpenAI message format
     const openaiMessages = [
       { role: "system", content: systemPrompt },
       ...filteredMessages.map(msg => ({ role: msg.role, content: msg.content })),
     ];
 
-    // Configure API request options
-    const options: any = {
+    console.log("🔍 Sending messages to LLM:", JSON.stringify(openaiMessages, null, 2));
+    console.log("🔍 Using model:", modelId, "| thinking:", activeProfile?.enableThinking ?? false);
+
+    const requestBody: any = {
       model: modelId,
       messages: openaiMessages,
       stream: true,
       stream_options: { include_usage: true },
     };
 
-    // Reasoning model parameters
-    if (isReasoningModel) {
-      options.max_completion_tokens = modelInfo.maxTokens || 4096;
-      options.temperature = 0;
+    if (activeProfile?.enableThinking) {
+      requestBody.enable_thinking = true;
+      if (activeProfile.thinkingBudget) {
+        requestBody.thinking_budget = activeProfile.thinkingBudget;
+      }
+      requestBody.max_completion_tokens = activeProfile.maxTokens ?? 16384;
+      requestBody.temperature = 1; // required by Qwen3 reasoning mode
     } else {
-      options.max_tokens = modelInfo.maxTokens || 4096;
-      options.temperature = 0;
+      requestBody.enable_thinking = false;
+      requestBody.max_tokens = activeProfile?.maxTokens ?? 4096;
+      requestBody.temperature = activeProfile?.temperature ?? 0;
     }
 
-    // Support tools
-    if (tools && tools.length > 0) {
-      const openAITools = tools.map(tool => ({
-        type: "function",
-        function: {
-          name: tool.name,
-          description: tool.description,
-          parameters: {
-            type: "object",
-            properties: {
-              input: { type: "string", description: "The input to the tool" },
-              requires_approval: { type: "boolean", description: "Whether this tool call requires user approval" }
-            },
-            required: ["input"]
-          }
-        }
-      }));
-      options.tools = openAITools;
-      options.tool_choice = "auto";
+    const mappedTools = this.mapTools(tools);
+    if (mappedTools.length > 0) {
+      requestBody.tools = mappedTools;
+      requestBody.tool_choice = "auto";
     }
 
     try {
-      const stream = await this.client.chat.completions.create(options) as unknown as AsyncIterable<any>;
+      const stream = await this.client.chat.completions.create(requestBody) as unknown as AsyncIterable<any>;
+      let accumulatedToolCalls: any[] = [];
+
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta;
         if (delta?.content) {
+          console.log("🔍 LLM chunk:", delta.content);
           yield { type: "text", text: delta.content };
         }
+        if (delta?.tool_calls) {
+          console.log("🔍 LLM tool calls:", delta.tool_calls);
+          for (const toolCall of delta.tool_calls) {
+            const existingIndex = accumulatedToolCalls.findIndex(tc => tc.index === toolCall.index);
+            if (existingIndex >= 0) {
+              if (toolCall.function) {
+                const existingFn = accumulatedToolCalls[existingIndex].function || {};
+                accumulatedToolCalls[existingIndex].function = {
+                  ...existingFn,
+                  ...toolCall.function,
+                  name: toolCall.function.name || existingFn.name || '',
+                  arguments: (existingFn.arguments || '') + (toolCall.function.arguments || ''),
+                };
+              }
+            } else {
+              accumulatedToolCalls.push(toolCall);
+            }
+          }
+        }
         if (chunk.usage) {
+          console.log("🔍 LLM usage:", chunk.usage);
           yield {
             type: "usage",
             inputTokens: chunk.usage.prompt_tokens || 0,
@@ -95,23 +151,95 @@ export class OpenAICompatibleProvider implements LLMProvider {
           };
         }
       }
+
+      // Convert accumulated OpenAI tool calls back to XML format expected by ExecutionEngine
+      if (accumulatedToolCalls.length > 0) {
+        console.log("🔍 Emitting accumulated tool calls:", JSON.stringify(accumulatedToolCalls));
+        for (const toolCall of accumulatedToolCalls) {
+          const fn = toolCall.function;
+          const toolName = fn?.name;
+          if (fn && toolName) {
+            let inputStr = fn.arguments || '';
+            try {
+              const parsed = JSON.parse(inputStr);
+              if (parsed !== null && typeof parsed === 'object' && typeof parsed.input === 'string') {
+                inputStr = parsed.input;
+              }
+            } catch {
+              // Not JSON — use raw arguments string as-is
+            }
+            const toolText = `<tool>${toolName}</tool><input>${inputStr}</input><requires_approval>false</requires_approval>`;
+            console.log("🔍 Converted tool call:", toolText);
+            yield { type: "text", text: toolText };
+          } else {
+            console.warn("🔍 Skipped tool call with missing name:", JSON.stringify(toolCall));
+          }
+        }
+      }
     } catch (error) {
+      console.error("🔍 LLM API Error:", error);
       yield { type: "text", text: "Error: Failed to stream response from OpenAI-Compatible API. Please try again." };
     }
   }
 
   getModel(): { id: string; info: OpenAICompatibleModelInfo } {
+    const defaultProfile = this.getDefaultProfile();
+    if (defaultProfile) {
+      return {
+        id: defaultProfile.modelId,
+        info: {
+          name: defaultProfile.name,
+          inputPrice: 0,
+          outputPrice: 0,
+          maxTokens: defaultProfile.maxTokens ?? 4096,
+          contextWindow: defaultProfile.contextWindowSize ?? 32000,
+          isReasoning: defaultProfile.enableThinking,
+        },
+      };
+    }
+
+    // Legacy fallback when no profiles configured
     const modelId = this.options.apiModelId;
-    const model = (this.options.openaiCompatibleModels || []).find(m => m.id === modelId);
+    const models = this.options.openaiCompatibleModels || [];
+    const model = models.find(m => m.id === modelId);
+
+    if (model) {
+      return {
+        id: modelId!,
+        info: {
+          name: model.name,
+          inputPrice: 0,
+          outputPrice: 0,
+          maxTokens: 4096,
+          isReasoning: model.isReasoning,
+        },
+      };
+    }
+
+    if (models.length > 0) {
+      const first = models[0];
+      return {
+        id: first.id,
+        info: {
+          name: first.name,
+          inputPrice: 0,
+          outputPrice: 0,
+          maxTokens: 4096,
+          isReasoning: first.isReasoning,
+        },
+      };
+    }
+
+    const fallbackId = modelId || 'gpt-3.5-turbo';
     return {
-      id: modelId || (this.options.openaiCompatibleModels[0]?.id || ''),
+      id: fallbackId,
       info: {
-        name: model?.name || modelId || '',
+        name: fallbackId,
         inputPrice: 0,
         outputPrice: 0,
         maxTokens: 4096,
-        isReasoning: model?.isReasoning,
-      }
+        isReasoning: false,
+      },
     };
   }
-} 
+}

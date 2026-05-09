@@ -1,92 +1,96 @@
-import Anthropic from "@anthropic-ai/sdk";
+interface Message { role: string; content: string | unknown }
 
-// Generic message interface for token counting
-interface GenericMessage {
-  role: string;
-  content: string | any;
-}
-
-/**
- * TokenManager handles token estimation, message history trimming,
- * and context window management.
- */
-
-// Constants for token management
-const MAX_CONTEXT_TOKENS = 12_000; // rough cap for messages sent to the LLM
-
-/** Very cheap "char/4" token estimator. */
 export const approxTokens = (text: string) => Math.ceil(text.length / 4);
 
-/**
- * Calculate the total token count for a list of messages
- */
-export const contextTokenCount = (msgs: Anthropic.MessageParam[] | GenericMessage[]) =>
+export const contextTokenCount = (msgs: Message[]) =>
   msgs.reduce((sum, m) => {
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
     return sum + approxTokens(content);
   }, 0);
 
-/**
- * Intelligently trim message history while preserving all user messages.
- * 
- * This function prioritizes keeping user messages (especially the original request)
- * while trimming assistant responses when needed to stay under the token limit.
- */
+export interface TrimResult {
+  trimmed: Message[];
+  removedSummaryPrompt: string | null;
+}
+
+export function truncateObservation(text: string, budgetTokens: number): string {
+  const budgetChars = budgetTokens * 4;
+  if (text.length <= budgetChars) return text;
+  return text.slice(0, budgetChars) + '[...troncato]';
+}
+
+const DEFAULT_CONTEXT_WINDOW = 32_000;
+
 export function trimHistory(
-  msgs: Anthropic.MessageParam[],
-  maxTokens = MAX_CONTEXT_TOKENS
-) {
-  // If we're under the limit or have very few messages, no need to trim
+  msgs: Message[],
+  maxTokens = Math.floor(DEFAULT_CONTEXT_WINDOW * 0.70)
+): TrimResult {
   if (contextTokenCount(msgs) <= maxTokens || msgs.length <= 2) {
-    return msgs;
+    return { trimmed: msgs, removedSummaryPrompt: null };
   }
-  
-  // Track which indices we want to keep
+
   const indicesToKeep = new Set<number>();
-  
-  // Always keep the first message (original request)
-  if (msgs.length > 0) {
-    indicesToKeep.add(0);
-  }
-  
-  // First pass: mark all user messages to keep
+  if (msgs.length > 0) indicesToKeep.add(0);
+
   for (let i = 1; i < msgs.length; i++) {
-    if (msgs[i].role === "user") {
-      indicesToKeep.add(i);
-    }
+    if (msgs[i].role === 'user') indicesToKeep.add(i);
   }
-  
-  // Calculate token count for all messages we're definitely keeping
+
   const keptMessages = Array.from(indicesToKeep).map(i => msgs[i]);
   const keptTokenCount = contextTokenCount(keptMessages);
   let remainingTokens = maxTokens - keptTokenCount;
-  
-  // Second pass: add assistant messages from newest to oldest until we hit the token limit
+
   const assistantIndices: number[] = [];
   for (let i = msgs.length - 1; i >= 1; i--) {
-    if (msgs[i].role === "assistant" && !indicesToKeep.has(i)) {
+    if (msgs[i].role === 'assistant' && !indicesToKeep.has(i)) {
       assistantIndices.push(i);
     }
   }
-  
-  // Try to add each assistant message if it fits in our token budget
+
   for (const idx of assistantIndices) {
     const msg = msgs[idx];
     const msgTokens = contextTokenCount([msg]);
-    
     if (msgTokens <= remainingTokens) {
       indicesToKeep.add(idx);
       remainingTokens -= msgTokens;
     }
   }
-  
-  // Build the final trimmed array in the original order
-  const trimmedMsgs: Anthropic.MessageParam[] = [];
+
+  const trimmed: Message[] = [];
+  const removedParts: string[] = [];
+
   for (let i = 0; i < msgs.length; i++) {
     if (indicesToKeep.has(i)) {
-      trimmedMsgs.push(msgs[i]);
+      trimmed.push(msgs[i]);
+    } else {
+      const content = typeof msgs[i].content === 'string'
+        ? msgs[i].content as string
+        : JSON.stringify(msgs[i].content);
+      removedParts.push(`[${msgs[i].role}]: ${content}`);
     }
   }
-  
-  return trimmedMsgs;
+
+  const removedSummaryPrompt = removedParts.length > 0
+    ? `Summarize in max 500 tokens:\n${removedParts.join('\n')}`
+    : null;
+
+  return { trimmed, removedSummaryPrompt };
+}
+
+export class TokenManager {
+  readonly contextWindowSize: number;
+  readonly trimThreshold: number;
+
+  constructor(contextWindowSize = DEFAULT_CONTEXT_WINDOW) {
+    this.contextWindowSize = contextWindowSize;
+    this.trimThreshold = Math.floor(contextWindowSize * 0.70);
+  }
+
+  trim(msgs: Message[]): TrimResult {
+    return trimHistory(msgs, this.trimThreshold);
+  }
+
+  truncate(text: string, budgetTokens: number): string {
+    return truncateObservation(text, budgetTokens);
+  }
 }

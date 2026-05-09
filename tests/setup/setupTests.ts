@@ -1,5 +1,4 @@
 import '@testing-library/jest-dom';
-import '@anthropic-ai/sdk/shims/node';
 import { TextEncoder, TextDecoder } from 'util';
 import { ReadableStream } from 'stream/web';
 

@@ -1,7 +1,7 @@
 import type { Page } from "playwright-crx";
 import { ConfigManager, ProviderConfig } from "../background/configManager";
 import { createProvider } from "../models/providers/factory";
-import { LLMProvider } from "../models/providers/types";
+import { AgentFunction, LLMProvider, ModelProfile } from "../models/providers/types";
 import { ErrorHandler } from "./ErrorHandler";
 import { ExecutionEngine, ExecutionCallbacks } from "./ExecutionEngine";
 import { MemoryManager } from "./MemoryManager";
@@ -40,6 +40,7 @@ export class BrowserAgent {
   private memoryManager: MemoryManager;
   private errorHandler: ErrorHandler;
   private executionEngine: ExecutionEngine;
+  private configManager: ConfigManager;
 
   /**
    * Create a new BrowserAgent
@@ -52,7 +53,7 @@ export class BrowserAgent {
     this.llmProvider = provider!;
 
     // Get all tools from the tools module and convert them to BrowserTool objects
-    const rawTools = getAllTools(page);
+    const rawTools = getAllTools(page, this.llmProvider);
     const browserTools = this.convertToBrowserTools(rawTools);
 
     // Initialize all the components
@@ -61,13 +62,16 @@ export class BrowserAgent {
     this.memoryManager = new MemoryManager(this.toolManager.getTools());
     this.errorHandler = new ErrorHandler();
 
+    this.configManager = ConfigManager.getInstance();
+
     // Initialize the execution engine with all the components
     this.executionEngine = new ExecutionEngine(
       this.llmProvider,
       this.toolManager,
       this.promptManager,
       this.memoryManager,
-      this.errorHandler
+      this.errorHandler,
+      this.configManager
     );
   }
 
@@ -127,6 +131,16 @@ export class BrowserAgent {
   }
 
   /**
+   * Set the active model profile for this execution session
+   */
+  setActiveProfile(profile: ModelProfile | null): void {
+    this.executionEngine.setActiveProfile(profile);
+  }
+
+  setMaxSteps(n: number): void { this.executionEngine.setMaxSteps(n); }
+  setMinMsBetweenCalls(ms: number): void { this.executionEngine.setMinMsBetweenCalls(ms); }
+
+  /**
    * Check if streaming is supported in the current environment
    */
   async isStreamingSupported(): Promise<boolean> {
@@ -134,13 +148,20 @@ export class BrowserAgent {
   }
 
   /**
-   * Execute a prompt with fallback support
+   * Execute a prompt with fallback support.
+   * If agentFunction is provided, the matching profile is resolved and set before execution.
    */
   async executePromptWithFallback(
     prompt: string,
     callbacks: ExecutionCallbacks,
-    initialMessages: any[] = []
+    initialMessages: any[] = [],
+    agentFunction?: AgentFunction
   ): Promise<void> {
+    if (agentFunction) {
+      const profile = await this.configManager.resolveProfileForFunction(agentFunction)
+        .catch(() => null);
+      this.executionEngine.setActiveProfile(profile);
+    }
     return this.executionEngine.executePromptWithFallback(
       prompt,
       callbacks,
@@ -185,18 +206,10 @@ export async function createBrowserAgent(
   } catch (error) {
     console.warn('Failed to get provider configuration, using default:', error);
     providerConfig = {
-      provider: 'anthropic',
+      provider: 'openai-compatible',
       apiKey,
-      apiModelId: 'claude-3-7-sonnet-20250219',
+      apiModelId: '',
     };
-  }
-
-  // Special case for Ollama: it doesn't require an API key
-  if (providerConfig.provider === 'ollama') {
-    // Use a dummy API key if none is provided
-    if (!providerConfig.apiKey) {
-      providerConfig.apiKey = 'dummy-key';
-    }
   }
 
   // Use the provided API key as a fallback if the stored one is empty
@@ -204,17 +217,28 @@ export async function createBrowserAgent(
     providerConfig.apiKey = apiKey;
   }
 
+  // Load model profiles
+  const [profiles, defaultProfileId] = await Promise.all([
+    configManager.getProfiles().catch(() => []),
+    configManager.getDefaultProfileId().catch(() => ''),
+  ]);
+
   // Create the provider with the configuration
-  const provider = await createProvider(providerConfig.provider, {
+  const provider = createProvider({
     apiKey: providerConfig.apiKey,
     apiModelId: providerConfig.apiModelId,
     baseUrl: providerConfig.baseUrl,
-    thinkingBudgetTokens: providerConfig.thinkingBudgetTokens,
+    openaiCompatibleModels: providerConfig.openaiCompatibleModels,
+    profiles,
+    defaultProfileId,
     dangerouslyAllowBrowser: true,
   });
 
-  // Create the agent with the provider configuration and provider
-  return new BrowserAgent(page, providerConfig, provider);
+  // Create the agent and set the active profile
+  const agent = new BrowserAgent(page, providerConfig, provider);
+  const activeProfile = await configManager.getActiveProfile().catch(() => null);
+  agent.setActiveProfile(activeProfile);
+  return agent;
 }
 
 /**
@@ -262,7 +286,8 @@ export async function executePromptWithFallback(
   agent: BrowserAgent,
   prompt: string,
   callbacks: ExecutionCallbacks,
-  initialMessages: any[] = []
+  initialMessages: any[] = [],
+  agentFunction?: AgentFunction
 ): Promise<void> {
-  return agent.executePromptWithFallback(prompt, callbacks, initialMessages);
+  return agent.executePromptWithFallback(prompt, callbacks, initialMessages, agentFunction);
 }

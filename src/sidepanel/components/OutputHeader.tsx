@@ -1,6 +1,7 @@
 import { faTrash, faBrain } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React from 'react';
+import { useLang } from '../../i18n';
 
 interface OutputHeaderProps {
   onClearHistory: () => void;
@@ -11,16 +12,18 @@ interface OutputHeaderProps {
 export const OutputHeader: React.FC<OutputHeaderProps> = ({
   onClearHistory,
   onReflectAndLearn,
-  isProcessing
+  isProcessing,
 }) => {
+  const { t } = useLang();
+
   return (
     <div className="flex justify-between items-center bg-base-300 p-3">
       <div className="card-title text-base-content text-lg">
-        Output
+        {t('output.title')}
       </div>
       <div className="flex items-center gap-2">
-        <div className="tooltip tooltip-bottom" data-tip="Reflect and learn from this session">
-          <button 
+        <div className="tooltip tooltip-bottom" data-tip={t('action.reflect')}>
+          <button
             onClick={onReflectAndLearn}
             className="btn btn-sm btn-outline btn-primary"
             disabled={isProcessing}
@@ -28,8 +31,8 @@ export const OutputHeader: React.FC<OutputHeaderProps> = ({
             <FontAwesomeIcon icon={faBrain} />
           </button>
         </div>
-        <div className="tooltip tooltip-bottom" data-tip="Clear conversation history and LLM context">
-          <button 
+        <div className="tooltip tooltip-bottom" data-tip={t('action.clear')}>
+          <button
             onClick={onClearHistory}
             className="btn btn-sm btn-outline"
             disabled={isProcessing}

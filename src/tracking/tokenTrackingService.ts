@@ -1,5 +1,4 @@
 import { ConfigManager } from "../background/configManager";
-import { anthropicModels, openaiModels, geminiModels, ollamaModels } from "../models/models";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -17,7 +16,7 @@ export class TokenTrackingService {
 
   // Provider and model tracking
   private configManager: ConfigManager;
-  private currentProvider: string = 'anthropic';
+  private currentProvider: string = 'openai-compatible';
   private currentModelId: string = '';
 
   // Subscribers for UI updates
@@ -96,45 +95,8 @@ export class TokenTrackingService {
   }
 
   private updateCost(): void {
-    let inputPrice = 0;
-    let outputPrice = 0;
-
-    // Get pricing based on current provider and model
-    switch (this.currentProvider) {
-      case 'anthropic':
-        if (this.currentModelId && this.currentModelId in anthropicModels) {
-          const model = anthropicModels[this.currentModelId as keyof typeof anthropicModels];
-          inputPrice = model.inputPrice;
-          outputPrice = model.outputPrice;
-        }
-        break;
-      case 'openai':
-        if (this.currentModelId && this.currentModelId in openaiModels) {
-          const model = openaiModels[this.currentModelId as keyof typeof openaiModels];
-          inputPrice = model.inputPrice;
-          outputPrice = model.outputPrice;
-        }
-        break;
-      case 'gemini':
-        if (this.currentModelId && this.currentModelId in geminiModels) {
-          const model = geminiModels[this.currentModelId as keyof typeof geminiModels];
-          inputPrice = model.inputPrice;
-          outputPrice = model.outputPrice;
-        }
-        break;
-      case 'ollama':
-        if (this.currentModelId && this.currentModelId in ollamaModels) {
-          const model = ollamaModels[this.currentModelId as keyof typeof ollamaModels];
-          inputPrice = model.inputPrice;
-          outputPrice = model.outputPrice;
-        }
-        break;
-    }
-
-    // Calculate cost based on price per million tokens
-    const inputCost = (inputPrice / 1_000_000) * this.inputTokens;
-    const outputCost = (outputPrice / 1_000_000) * this.outputTokens;
-    this.cost = inputCost + outputCost;
+    // InfinitAgent uses a local/private openai-compatible endpoint — cost is always 0
+    this.cost = 0;
   }
 
   private notifySubscribers(windowId?: number): void {
