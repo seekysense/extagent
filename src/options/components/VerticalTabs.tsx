@@ -6,6 +6,9 @@ import { ProvidersTab } from './tabs/ProvidersTab';
 import { MemoryTab } from './tabs/MemoryTab';
 import { SkillsTab } from './tabs/SkillsTab';
 import { DomainProfilesTab } from './tabs/DomainProfilesTab';
+import { HelpTab } from './tabs/HelpTab';
+import { OptionsSidebar } from './OptionsSidebar';
+import { PageHeader } from './PageHeader';
 
 interface VerticalTabsProps {
   openaiCompatibleApiKey: string;
@@ -27,15 +30,16 @@ interface VerticalTabsProps {
 
 export function VerticalTabs(props: VerticalTabsProps) {
   const [activeTab, setActiveTab] = useState('general');
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
-  const tabs = [
-    { id: 'general', label: t('options.tabs.general'), icon: '🏠' },
-    { id: 'providers', label: t('options.tabs.llm'), icon: '⚙️' },
-    { id: 'memory', label: t('options.tabs.memory'), icon: '🧠' },
-    { id: 'skills', label: t('options.tabs.skills'), icon: '⚡' },
-    { id: 'profiles', label: t('options.tabs.profiles'), icon: '🌐' },
-  ];
+  const titles: Record<string, { t: string; s: string }> = {
+    general:   { t: t('options.tabs.general'),  s: 'Comportamento di base, lingua e prompt di sistema.' },
+    providers: { t: t('options.tabs.llm'),       s: 'API key, profili modello e routing per funzione.' },
+    memory:    { t: t('options.tabs.memory'),    s: 'Cosa l\'agente ricorda tra sessioni.' },
+    skills:    { t: t('options.tabs.skills'),    s: 'Workflow riutilizzabili scritti in Markdown.' },
+    profiles:  { t: t('options.tabs.profiles'),  s: 'Comportamento e selettori specifici per sito.' },
+    help:      { t: t('options.tabs.help'),      s: lang === 'it' ? 'Guide, esempi e riferimento ai tool.' : 'Guides, examples and tool reference.' },
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -67,36 +71,27 @@ export function VerticalTabs(props: VerticalTabsProps) {
         return <SkillsTab />;
       case 'profiles':
         return <DomainProfilesTab />;
+      case 'help':
+        return <HelpTab />;
       default:
         return <GeneralTab />;
     }
   };
 
-  return (
-    <div className="flex min-h-screen bg-base-200">
-      <div className="w-64 bg-base-100 shadow-lg">
-        <div className="p-4">
-          <h1 className="text-2xl font-bold text-primary mb-6">InfinitAgent</h1>
-          <div className="tabs tabs-vertical w-full">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={`tab tab-lg justify-start gap-3 w-full ${
-                  activeTab === tab.id ? 'tab-active' : ''
-                }`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <span className="text-lg">{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+  const cur = titles[activeTab] ?? titles.general;
 
-      <div className="flex-1 p-6 overflow-auto">
-        {renderTabContent()}
-      </div>
+  return (
+    <div data-theme="infinit" style={{
+      display: 'flex', minHeight: '100vh', background: 'var(--bg)',
+      fontFamily: 'var(--font-sans)',
+    }}>
+      <OptionsSidebar active={activeTab} onChange={setActiveTab} />
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <PageHeader title={cur.t} subtitle={cur.s} />
+        <div className="ia-scroll" style={{ flex: 1, overflowY: 'auto', padding: '24px 32px 40px' }}>
+          {renderTabContent()}
+        </div>
+      </main>
     </div>
   );
 }

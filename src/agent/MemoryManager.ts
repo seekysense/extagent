@@ -128,6 +128,19 @@ export class MemoryManager {
     await chrome.storage.local.set({ [STORAGE_KEY]: all });
   }
 
+  async deleteMemory(id: string): Promise<void> {
+    const all = await this._loadAll();
+    await chrome.storage.local.set({ [STORAGE_KEY]: all.filter(m => m.id !== id) });
+  }
+
+  async updateMemoryPattern(id: string, pattern: string): Promise<void> {
+    const all = await this._loadAll();
+    const idx = all.findIndex(m => m.id === id);
+    if (idx < 0) return;
+    all[idx] = { ...all[idx], pattern, updatedAt: new Date().toISOString() };
+    await chrome.storage.local.set({ [STORAGE_KEY]: all });
+  }
+
   async getSortedMemories(domain: string): Promise<Memory[]> {
     const all = await this._loadAll();
     const now = Date.now();

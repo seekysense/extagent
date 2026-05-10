@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { AgentFunction, FunctionMapping, ModelProfile } from '../../models/providers/types';
 import { ConfigManager } from '../../background/configManager';
 import { useLang } from '../../i18n';
+import { Button, Chip, IconButton, Toggle, FloatingInput, LucideIcon } from '../../ui';
+import { Section } from './Section';
 
 interface OpenAICompatibleSettingsProps {
   openaiCompatibleApiKey: string;
@@ -26,8 +28,96 @@ const ROUTABLE_FUNCTIONS: AgentFunction[] = [
   'automation', 'skill', 'recording', 'smartPaste', 'smartExtract', 'observation',
 ];
 
-function profileLabel(p: ModelProfile): string {
-  return `${p.name}${p.enableThinking ? ' ⚡' : ' 🚀'}`;
+const EMPTY_PROFILE: Omit<ModelProfile, 'id'> = {
+  name: '',
+  modelId: '',
+  enableThinking: false,
+  thinkingBudget: undefined,
+  contextWindowSize: 32000,
+  temperature: 0,
+  maxTokens: 4096,
+};
+
+function KVField({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 12.5, color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{value}</span>
+    </div>
+  );
+}
+
+interface ProfileEditorProps {
+  profile: ModelProfile;
+  onChange: (field: keyof ModelProfile, value: any) => void;
+  onDone: () => void;
+  onCancel: () => void;
+  isNew?: boolean;
+}
+
+function ProfileEditorInline({ profile, onChange, onDone, onCancel, isNew }: ProfileEditorProps) {
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '7px 10px', border: '1px solid var(--border)',
+    borderRadius: 6, outline: 'none', background: 'var(--surface)', color: 'var(--text)',
+    fontFamily: 'inherit', fontSize: 12.5, boxSizing: 'border-box',
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)',
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, display: 'block',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={labelStyle}>Nome profilo</label>
+          <input style={inputStyle} value={profile.name} onChange={e => onChange('name', e.target.value)} placeholder="Es. Fast · GPT-4" />
+        </div>
+        <div>
+          <label style={labelStyle}>Model ID</label>
+          <input style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 12 }} value={profile.modelId} onChange={e => onChange('modelId', e.target.value)} placeholder="Es. gpt-4o-mini" />
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div>
+          <label style={labelStyle}>Context window</label>
+          <input style={inputStyle} type="number" value={profile.contextWindowSize ?? ''} onChange={e => onChange('contextWindowSize', Number(e.target.value))} />
+        </div>
+        <div>
+          <label style={labelStyle}>Temperature{profile.enableThinking ? ' (forzata 1)' : ''}</label>
+          <input style={inputStyle} type="number" step="0.1" min="0" max="2"
+            value={profile.enableThinking ? 1 : (profile.temperature ?? 0)}
+            disabled={profile.enableThinking}
+            onChange={e => onChange('temperature', Number(e.target.value))} />
+        </div>
+        <div>
+          <label style={labelStyle}>Max tokens</label>
+          <input style={inputStyle} type="number" value={profile.maxTokens ?? ''} onChange={e => onChange('maxTokens', Number(e.target.value))} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+        <Toggle
+          checked={profile.enableThinking}
+          onChange={() => onChange('enableThinking', !profile.enableThinking)}
+          label={profile.enableThinking ? '⚡ Thinking ON' : '🚀 Fast mode'}
+        />
+        {profile.enableThinking && (
+          <div style={{ flex: 1 }}>
+            <label style={{ ...labelStyle, marginBottom: 2 }}>Budget thinking (token)</label>
+            <input style={{ ...inputStyle, maxWidth: 160 }} type="number" value={profile.thinkingBudget ?? ''}
+              placeholder="es. 8192"
+              onChange={e => onChange('thinkingBudget', e.target.value ? Number(e.target.value) : undefined)} />
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Button variant="ghost" size="sm" onClick={onCancel}>Annulla</Button>
+        <Button size="sm" icon="Save" onClick={onDone} disabled={!profile.name.trim() || !profile.modelId.trim()}>
+          {isNew ? 'Aggiungi' : 'Salva'}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function OpenAICompatibleSettings({
@@ -35,8 +125,8 @@ export function OpenAICompatibleSettings({
   setOpenaiCompatibleApiKey,
   openaiCompatibleBaseUrl,
   setOpenaiCompatibleBaseUrl,
-  openaiCompatibleModelId,
-  setOpenaiCompatibleModelId,
+  openaiCompatibleModelId: _openaiCompatibleModelId,
+  setOpenaiCompatibleModelId: _setOpenaiCompatibleModelId,
   profiles,
   setProfiles,
   defaultProfileId,
@@ -47,20 +137,12 @@ export function OpenAICompatibleSettings({
   const { t } = useLang();
 
   const [testState, setTestState] = useState<{ loading: boolean; ok: boolean | null; message: string }>({
-    loading: false,
-    ok: null,
-    message: '',
+    loading: false, ok: null, message: '',
   });
-
-  const [newProfile, setNewProfile] = useState<Omit<ModelProfile, 'id'>>({
-    name: '',
-    modelId: '',
-    enableThinking: false,
-    thinkingBudget: undefined,
-    contextWindowSize: 32000,
-    temperature: 0,
-    maxTokens: 4096,
-  });
+  const [showKey, setShowKey] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newProfile, setNewProfile] = useState<ModelProfile>({ id: '', ...EMPTY_PROFILE });
 
   const handleTestConnection = async () => {
     if (!openaiCompatibleApiKey || !openaiCompatibleBaseUrl) {
@@ -69,13 +151,10 @@ export function OpenAICompatibleSettings({
     }
     const modelId = profiles.find(p => p.id === defaultProfileId)?.modelId
       || profiles[0]?.modelId
-      || openaiCompatibleModelId
       || 'test';
     setTestState({ loading: true, ok: null, message: '' });
     const result = await ConfigManager.getInstance().testConnection(
-      openaiCompatibleBaseUrl,
-      openaiCompatibleApiKey,
-      modelId
+      openaiCompatibleBaseUrl, openaiCompatibleApiKey, modelId
     );
     setTestState({
       loading: false,
@@ -84,23 +163,25 @@ export function OpenAICompatibleSettings({
     });
   };
 
+  const handleRemoveProfile = (id: string) => {
+    const updated = profiles.filter(p => p.id !== id);
+    setProfiles(updated);
+    if (defaultProfileId === id) setDefaultProfileId(updated[0]?.id ?? '');
+    if (editingProfileId === id) setEditingProfileId(null);
+  };
+
+  const handleEditProfile = (id: string, field: keyof ModelProfile, value: any) => {
+    setProfiles(profiles.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
   const handleAddProfile = () => {
     if (!newProfile.name.trim() || !newProfile.modelId.trim()) return;
     const id = generateId();
     const updated = [...profiles, { ...newProfile, id }];
     setProfiles(updated);
     if (!defaultProfileId) setDefaultProfileId(id);
-    setNewProfile({ name: '', modelId: '', enableThinking: false, thinkingBudget: undefined, contextWindowSize: 32000, temperature: 0, maxTokens: 4096 });
-  };
-
-  const handleRemoveProfile = (id: string) => {
-    const updated = profiles.filter(p => p.id !== id);
-    setProfiles(updated);
-    if (defaultProfileId === id) setDefaultProfileId(updated[0]?.id ?? '');
-  };
-
-  const handleEditProfile = (id: string, field: keyof ModelProfile, value: any) => {
-    setProfiles(profiles.map(p => p.id === id ? { ...p, [field]: value } : p));
+    setNewProfile({ id: '', ...EMPTY_PROFILE });
+    setShowNewForm(false);
   };
 
   const getMappedProfileId = (fn: AgentFunction): string =>
@@ -122,249 +203,194 @@ export function OpenAICompatibleSettings({
   };
 
   return (
-    <div className="border rounded-lg p-4 mb-4">
-      <h3 className="font-bold mb-3">{t('openai.settings.title')}</h3>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
 
-      {/* Connection */}
-      <div className="form-control mb-3">
-        <label className="label"><span className="label-text">{t('openai.apiKey')}</span></label>
-        <input
-          type="password"
-          value={openaiCompatibleApiKey}
-          onChange={e => setOpenaiCompatibleApiKey(e.target.value)}
-          placeholder={t('openai.apiKeyPlaceholder')}
-          className="input input-bordered w-full"
-        />
-      </div>
-      <div className="form-control mb-3">
-        <label className="label"><span className="label-text">{t('openai.baseUrl')}</span></label>
-        <input
-          type="text"
-          value={openaiCompatibleBaseUrl}
-          onChange={e => setOpenaiCompatibleBaseUrl(e.target.value)}
-          placeholder={t('openai.baseUrlPlaceholder')}
-          className="input input-bordered w-full"
-        />
-      </div>
-
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={handleTestConnection}
-          disabled={testState.loading}
-          className="btn btn-sm btn-outline"
-        >
-          {testState.loading ? <span className="loading loading-spinner loading-xs"></span> : null}
-          {t('openai.testConnection')}
-        </button>
-        {testState.ok === true && (
-          <span className="text-success text-sm">✓ {testState.message}</span>
-        )}
-        {testState.ok === false && (
-          <span className="text-error text-sm">✗ {testState.message}</span>
-        )}
-      </div>
-
-      {/* Profiles */}
-      <div className="border-t pt-4 mt-2">
-        <h4 className="font-semibold mb-3">{t('openai.profiles.title')}</h4>
-
-        {profiles.length === 0 && (
-          <p className="text-sm opacity-60 mb-3">{t('openai.profiles.empty')}</p>
-        )}
-
-        {profiles.map(profile => (
-          <div key={profile.id} className="border rounded p-3 mb-3 bg-base-200">
-            <div className="flex items-center gap-2 mb-2">
-              <input
-                type="radio"
-                name="defaultProfile"
-                checked={defaultProfileId === profile.id}
-                onChange={() => setDefaultProfileId(profile.id)}
-                className="radio radio-sm"
-                title={t('openai.profiles.setDefault')}
-              />
-              <span className="text-xs font-bold opacity-60">{t('openai.profiles.default')}</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div className="form-control">
-                <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.namePlaceholder')}</span></label>
-                <input
-                  type="text"
-                  value={profile.name}
-                  onChange={e => handleEditProfile(profile.id, 'name', e.target.value)}
-                  className="input input-bordered input-sm w-full"
-                />
-              </div>
-              <div className="form-control">
-                <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.modelId')}</span></label>
-                <input
-                  type="text"
-                  value={profile.modelId}
-                  onChange={e => handleEditProfile(profile.id, 'modelId', e.target.value)}
-                  className="input input-bordered input-sm w-full"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 mb-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={profile.enableThinking}
-                  onChange={e => handleEditProfile(profile.id, 'enableThinking', e.target.checked)}
-                  className="checkbox checkbox-sm"
-                />
-                <span className="text-sm">{t('openai.profiles.enableThinking')}</span>
-              </label>
-            </div>
-
-            {profile.enableThinking && (
-              <div className="form-control mb-2 max-w-xs">
-                <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.thinkingBudget')}</span></label>
-                <input
-                  type="number"
-                  value={profile.thinkingBudget ?? ''}
-                  onChange={e => handleEditProfile(profile.id, 'thinkingBudget', e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder={t('openai.profiles.thinkingBudgetPlaceholder')}
-                  className="input input-bordered input-sm"
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-2 mb-2">
-              <div className="form-control">
-                <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.contextWindow')}</span></label>
-                <input
-                  type="number"
-                  value={profile.contextWindowSize ?? 32000}
-                  onChange={e => handleEditProfile(profile.id, 'contextWindowSize', Number(e.target.value))}
-                  className="input input-bordered input-sm"
-                />
-              </div>
-              <div className="form-control">
-                <label className="label py-0">
-                  <span className="label-text text-xs">
-                    {t('openai.profiles.temperature')}{profile.enableThinking ? ` ${t('openai.profiles.temperatureForced')}` : ''}
-                  </span>
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="2"
-                  value={profile.enableThinking ? 1 : (profile.temperature ?? 0)}
-                  disabled={profile.enableThinking}
-                  onChange={e => handleEditProfile(profile.id, 'temperature', Number(e.target.value))}
-                  className="input input-bordered input-sm"
-                />
-              </div>
-              <div className="form-control">
-                <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.maxTokens')}</span></label>
-                <input
-                  type="number"
-                  value={profile.maxTokens ?? 4096}
-                  onChange={e => handleEditProfile(profile.id, 'maxTokens', Number(e.target.value))}
-                  className="input input-bordered input-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="badge badge-sm">
-                {profile.enableThinking ? t('openai.profiles.thinkingOn') : t('openai.profiles.thinkingOff')}
-              </span>
-              <button
-                onClick={() => handleRemoveProfile(profile.id)}
-                className="btn btn-xs btn-ghost text-error"
-              >
-                {t('openai.profiles.remove')}
-              </button>
-            </div>
+      {/* ── Credenziali ── */}
+      <Section title="Credenziali" description="Compatibili con qualsiasi endpoint OpenAI-compatible.">
+        <div className="ia-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text)', fontWeight: 600, fontSize: 13 }}>
+            <LucideIcon name="KeyRound" size={14} color="var(--primary)" /> OpenAI-compatible
           </div>
-        ))}
-
-        {/* Add new profile */}
-        <div className="border border-dashed rounded p-3 mt-2">
-          <p className="text-xs font-semibold mb-2 opacity-60">{t('openai.profiles.new')}</p>
-          <div className="grid grid-cols-2 gap-2 mb-2">
-            <div className="form-control">
-              <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.name')}</span></label>
-              <input
-                type="text"
-                value={newProfile.name}
-                onChange={e => setNewProfile(p => ({ ...p, name: e.target.value }))}
-                placeholder={t('openai.profiles.namePlaceholderNew')}
-                className="input input-bordered input-sm"
-              />
-            </div>
-            <div className="form-control">
-              <label className="label py-0"><span className="label-text text-xs">{t('openai.profiles.modelId')}</span></label>
-              <input
-                type="text"
-                value={newProfile.modelId}
-                onChange={e => setNewProfile(p => ({ ...p, modelId: e.target.value }))}
-                placeholder={t('openai.profiles.modelIdPlaceholder')}
-                className="input input-bordered input-sm"
-              />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer mb-2">
-            <input
-              type="checkbox"
-              checked={newProfile.enableThinking}
-              onChange={e => setNewProfile(p => ({ ...p, enableThinking: e.target.checked }))}
-              className="checkbox checkbox-sm"
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
+            <FloatingInput
+              label="API Key"
+              value={showKey ? openaiCompatibleApiKey : (openaiCompatibleApiKey ? '••••••••••••••••••••' : '')}
+              onChange={(v) => { if (showKey) setOpenaiCompatibleApiKey(v); }}
+              icon="KeyRound"
+              mono
+              suffix={
+                openaiCompatibleApiKey ? (
+                  <button
+                    onClick={() => setShowKey(s => !s)}
+                    style={{ background: 'transparent', border: 0, padding: 4, cursor: 'pointer', color: 'var(--text-muted)', display: 'inline-flex', borderRadius: 4 }}
+                  >
+                    <LucideIcon name={showKey ? 'EyeOff' : 'Eye'} size={14} />
+                  </button>
+                ) : undefined
+              }
             />
-            <span className="text-sm">{t('openai.profiles.enableThinkingShort')}</span>
-          </label>
-          <button
-            onClick={handleAddProfile}
-            disabled={!newProfile.name.trim() || !newProfile.modelId.trim()}
-            className="btn btn-sm btn-primary"
-          >
-            {t('openai.profiles.add')}
-          </button>
+            <FloatingInput
+              label="Base URL"
+              value={openaiCompatibleBaseUrl}
+              onChange={setOpenaiCompatibleBaseUrl}
+              icon="Link"
+              mono
+            />
+          </div>
+          {/* API Key raw input (hidden — shown only when key not yet set or in show mode) */}
+          {(!openaiCompatibleApiKey || showKey) && (
+            <div>
+              <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 4 }}>
+                {openaiCompatibleApiKey ? 'Modifica API Key' : 'API Key'}
+              </label>
+              <input
+                type="text"
+                value={openaiCompatibleApiKey}
+                onChange={e => setOpenaiCompatibleApiKey(e.target.value)}
+                placeholder="sk-…"
+                style={{
+                  width: '100%', padding: '7px 10px', border: '1px solid var(--border)',
+                  borderRadius: 6, outline: 'none', background: 'var(--surface)', color: 'var(--text)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12, boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <Button variant="outline" icon="Wifi" onClick={handleTestConnection} disabled={testState.loading}>
+              {testState.loading ? 'Verifica…' : t('openai.testConnection')}
+            </Button>
+            {testState.ok === true && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <LucideIcon name="CheckCircle2" size={14} color="var(--success)" />
+                <span style={{ color: 'var(--text)' }}>{testState.message}</span>
+              </span>
+            )}
+            {testState.ok === false && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <LucideIcon name="XCircle" size={14} color="var(--error)" />
+                <span style={{ color: 'var(--error)' }}>{testState.message}</span>
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      </Section>
 
-      {/* Function routing */}
-      <div className="border-t pt-4 mt-2">
-        <h4 className="font-semibold mb-1">{t('openai.routing.title')}</h4>
-        <p className="text-xs opacity-60 mb-3">{t('openai.routing.desc')}</p>
+      {/* ── Profili modello ── */}
+      <Section
+        title="Profili modello"
+        description="Configura più profili e assegnali a funzioni specifiche."
+        action={
+          <Button icon="Plus" size="sm" variant="outline" onClick={() => { setShowNewForm(true); setEditingProfileId(null); }}>
+            Nuovo profilo
+          </Button>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {profiles.length === 0 && !showNewForm && (
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', padding: '8px 0' }}>
+              {t('openai.profiles.empty')}
+            </div>
+          )}
 
-        {profiles.length === 0 ? (
-          <p className="text-sm opacity-60">{t('openai.routing.noProfiles')}</p>
-        ) : (
-          <table className="table table-sm w-full">
-            <thead>
-              <tr>
-                <th className="text-xs">{t('openai.routing.function')}</th>
-                <th className="text-xs">{t('openai.routing.profile')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ROUTABLE_FUNCTIONS.map(fn => (
-                <tr key={fn}>
-                  <td className="text-sm">{t(`function.${fn}`)}</td>
-                  <td>
-                    <select
-                      value={getMappedProfileId(fn)}
-                      onChange={e => handleFunctionMappingChange(fn, e.target.value)}
-                      className="select select-bordered select-xs w-full max-w-xs"
-                    >
-                      <option value="">{t('openai.routing.useDefault')}</option>
-                      {profiles.map(p => (
-                        <option key={p.id} value={p.id}>{profileLabel(p)}</option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+          {profiles.map(profile => (
+            <div key={profile.id} className="ia-card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {editingProfileId === profile.id ? (
+                <ProfileEditorInline
+                  profile={profile}
+                  onChange={(field, val) => handleEditProfile(profile.id, field, val)}
+                  onDone={() => setEditingProfileId(null)}
+                  onCancel={() => setEditingProfileId(null)}
+                />
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{profile.name}</span>
+                      {defaultProfileId === profile.id && <Chip size="xs" tone="primarySolid">DEFAULT</Chip>}
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)',
+                        background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 4,
+                      }}>{profile.modelId}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <IconButton
+                        icon="Star" size="sm" title={t('openai.profiles.setDefault')}
+                        active={defaultProfileId === profile.id}
+                        onClick={() => setDefaultProfileId(profile.id)}
+                      />
+                      <IconButton icon="Pencil" size="sm" title="Modifica" onClick={() => { setEditingProfileId(profile.id); setShowNewForm(false); }} />
+                      <IconButton icon="Trash2" size="sm" title={t('openai.profiles.remove')} danger onClick={() => handleRemoveProfile(profile.id)} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px 16px', fontSize: 11.5 }}>
+                    <KVField label="Context window"  value={profile.contextWindowSize?.toLocaleString() ?? '—'} />
+                    <KVField label="Max tokens"      value={profile.maxTokens?.toLocaleString() ?? '—'} />
+                    <KVField label="Temperature"     value={profile.enableThinking ? '1 (forced)' : (profile.temperature?.toFixed(1) ?? '—')} />
+                    <KVField label="Thinking budget" value={profile.thinkingBudget?.toLocaleString() ?? '—'} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                    <Toggle
+                      checked={profile.enableThinking}
+                      onChange={() => handleEditProfile(profile.id, 'enableThinking', !profile.enableThinking)}
+                      label={profile.enableThinking ? '⚡ Thinking ON' : '🚀 Fast mode'}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+
+          {showNewForm && (
+            <div className="ia-card ia-expand-in" style={{ padding: 14, border: '1.5px dashed var(--border)' }}>
+              <ProfileEditorInline
+                profile={newProfile}
+                onChange={(field, val) => setNewProfile(p => ({ ...p, [field]: val }))}
+                onDone={handleAddProfile}
+                onCancel={() => { setShowNewForm(false); setNewProfile({ id: '', ...EMPTY_PROFILE }); }}
+                isNew
+              />
+            </div>
+          )}
+        </div>
+      </Section>
+
+      {/* ── Function routing ── */}
+      <Section title="Function routing" description={t('openai.routing.desc')}>
+        <div className="ia-card" style={{ overflow: 'hidden' }}>
+          {profiles.length === 0 ? (
+            <div style={{ padding: '16px 14px', fontSize: 12.5, color: 'var(--text-muted)' }}>
+              {t('openai.routing.noProfiles')}
+            </div>
+          ) : (
+            ROUTABLE_FUNCTIONS.map((fn, i) => (
+              <div key={fn} style={{
+                display: 'grid', gridTemplateColumns: '160px 1fr 220px',
+                padding: '11px 14px', alignItems: 'center', gap: 12,
+                borderBottom: i < ROUTABLE_FUNCTIONS.length - 1 ? '1px solid var(--border)' : 'none',
+              }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)' }}>{fn}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t(`function.${fn}`)}</span>
+                <select
+                  value={getMappedProfileId(fn)}
+                  onChange={e => handleFunctionMappingChange(fn, e.target.value)}
+                  style={{
+                    height: 32, padding: '0 10px', borderRadius: 6,
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    fontSize: 12, color: 'var(--text)', cursor: 'pointer',
+                    fontFamily: 'inherit', width: '100%', outline: 'none',
+                  }}
+                >
+                  <option value="">{t('openai.routing.useDefault')}</option>
+                  {profiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            ))
+          )}
+        </div>
+      </Section>
     </div>
   );
 }

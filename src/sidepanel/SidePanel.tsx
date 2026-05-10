@@ -6,14 +6,14 @@ import { ApprovalRequest } from './components/ApprovalRequest';
 import { MessageDisplay } from './components/MessageDisplay';
 import { OutputHeader } from './components/OutputHeader';
 import { PromptForm } from './components/PromptForm';
-import { ProviderSelector } from './components/ProviderSelector';
-import { TabStatusBar } from './components/TabStatusBar';
+import { SPHeader } from './components/SPHeader';
 import { useChromeMessaging } from './hooks/useChromeMessaging';
 import { useMessageManagement } from './hooks/useMessageManagement';
 import { useTabManagement } from './hooks/useTabManagement';
 import { QuickActions } from './components/QuickActions';
 import { TaskHistory } from './components/TaskHistory';
 import { useTaskHistory } from './hooks/useTaskHistory';
+import { EmptyState, Button } from '../ui';
 
 export function SidePanel() {
   const { t } = useLang();
@@ -327,56 +327,42 @@ export function SidePanel() {
   };
 
   return (
-    <div className="flex flex-col h-screen p-4 bg-base-200">
-      <header className="mb-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold text-primary">{t('app.title')}</h1>
-        <TabStatusBar
-          tabId={tabId}
-          tabTitle={tabTitle}
-          tabStatus={tabStatus}
-        />
-      </div>
-      <p className="text-sm text-gray-600 mt-2">
-          {t('sidepanel.tagline')}
-        </p>
-      </header>
+    <div data-theme="infinit" style={{
+      width: '100%', height: '100vh', display: 'flex', flexDirection: 'column',
+      background: 'var(--bg)', position: 'relative', overflow: 'hidden',
+      fontFamily: 'var(--font-sans)',
+    }}>
+      <SPHeader
+        tabName={tabTitle}
+        tabStatus={tabStatus}
+        onRefresh={() => { if (tabId) chrome.tabs.reload(tabId); }}
+        onTabClick={() => {}}
+      />
 
       {hasConfiguredProviders ? (
         <>
-          <div className="flex flex-col flex-grow gap-4 overflow-hidden md:flex-row shadow-sm">
-            <div className="card bg-base-100 shadow-md flex-1 flex flex-col overflow-hidden">
-              <OutputHeader
-                onClearHistory={handleClearHistory}
-                onReflectAndLearn={handleReflectAndLearn}
-                isProcessing={isProcessing}
-              />
-              <div
-                ref={outputRef}
-                className="card-body p-3 overflow-auto bg-base-100 flex-1"
-              >
-                <MessageDisplay
-                  messages={messages}
-                  streamingSegments={streamingSegments}
-                  isStreaming={isStreaming}
-                />
-              </div>
-            </div>
+          <OutputHeader
+            onClearHistory={handleClearHistory}
+            onReflectAndLearn={handleReflectAndLearn}
+            isProcessing={isProcessing}
+            messageCount={messages.length}
+          />
+          <div
+            ref={outputRef}
+            className="ia-scroll"
+            style={{ flex: 1, overflowY: 'auto', padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0 }}
+          >
+            <MessageDisplay
+              messages={messages}
+              streamingSegments={streamingSegments}
+              isStreaming={isStreaming}
+            />
           </div>
 
-          {/* Display approval requests */}
-          {approvalRequests.map(req => (
-            <ApprovalRequest
-              key={req.requestId}
-              requestId={req.requestId}
-              toolName={req.toolName}
-              toolInput={req.toolInput}
-              reason={req.reason}
-              onApprove={handleApprove}
-              onReject={handleReject}
-            />
-          ))}
-
+          <QuickActions
+            executePrompt={executePrompt}
+            isProcessing={isProcessing}
+          />
           <TaskHistory history={taskHistory} onRerun={handleSubmit} />
           <PromptForm
             onSubmit={handleSubmit}
@@ -384,27 +370,28 @@ export function SidePanel() {
             isProcessing={isProcessing}
             tabStatus={tabStatus}
           />
-          <QuickActions
-            executePrompt={executePrompt}
-            isProcessing={isProcessing}
-          />
-          <ProviderSelector isProcessing={isProcessing} />
         </>
       ) : (
-        <div className="flex flex-col flex-grow items-center justify-center">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-semibold mb-2">{t('sidepanel.noProvider')}</h2>
-            <p className="text-gray-600 mb-4">
-              {t('sidepanel.noProviderDesc')}
-            </p>
-            <button
-              onClick={navigateToOptions}
-              className="btn btn-primary"
-            >
-              {t('sidepanel.configureProvider')}
-            </button>
-          </div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <EmptyState
+            icon="Unplug"
+            title={t('sidepanel.noProvider')}
+            description={t('sidepanel.noProviderDesc')}
+            cta={<Button icon="Cpu" onClick={navigateToOptions}>{t('sidepanel.configureProvider')}</Button>}
+          />
         </div>
+      )}
+
+      {approvalRequests.length > 0 && (
+        <ApprovalRequest
+          key={approvalRequests[0].requestId}
+          requestId={approvalRequests[0].requestId}
+          toolName={approvalRequests[0].toolName}
+          toolInput={approvalRequests[0].toolInput}
+          reason={approvalRequests[0].reason}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
       )}
     </div>
   );

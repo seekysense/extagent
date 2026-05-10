@@ -195,7 +195,7 @@ export const it: Record<string, string> = {
   // Skills
   'skills.title': 'Gestione Skill',
   'skills.desc': 'Le skill sono micro-programmi salvati come file .md che automatizzano sequenze di operazioni.',
-  'skills.new': '+ Nuova skill',
+  'skills.new': 'Nuova skill',
   'skills.import': '⬆ Importa .md',
   'skills.export': 'Esporta .md',
   'skills.run': 'Esegui',
@@ -238,9 +238,10 @@ export const it: Record<string, string> = {
 
   // Domain profiles
   'options.tabs.profiles': 'Profili Dominio',
+  'options.tabs.help': 'Help & Docs',
   'profile.title': 'Profili Dominio',
   'profile.desc': 'I profili dominio arricchiscono il sistema prompt e forniscono hint per i portali specifici.',
-  'profile.new': '+ Nuovo profilo',
+  'profile.new': 'Nuovo profilo',
   'profile.export': 'Esporta JSON',
   'profile.import': 'Importa JSON',
   'profile.empty': 'Nessun profilo configurato.',

@@ -1,45 +1,30 @@
-import { faTrash, faBrain } from '@fortawesome/free-solid-svg-icons';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import React from 'react';
-import { useLang } from '../../i18n';
+import { Chip, IconButton } from '../../ui';
 
 interface OutputHeaderProps {
   onClearHistory: () => void;
   onReflectAndLearn: () => void;
   isProcessing: boolean;
+  messageCount?: number;
 }
 
 export const OutputHeader: React.FC<OutputHeaderProps> = ({
   onClearHistory,
   onReflectAndLearn,
-  isProcessing,
+  messageCount = 0,
 }) => {
-  const { t } = useLang();
-
   return (
-    <div className="flex justify-between items-center bg-base-300 p-3">
-      <div className="card-title text-base-content text-lg">
-        {t('output.title')}
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 14px 6px', flex: '0 0 auto',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Output</span>
+        <Chip size="xs" tone="neutral">{messageCount} messages</Chip>
       </div>
-      <div className="flex items-center gap-2">
-        <div className="tooltip tooltip-bottom" data-tip={t('action.reflect')}>
-          <button
-            onClick={onReflectAndLearn}
-            className="btn btn-sm btn-outline btn-primary"
-            disabled={isProcessing}
-          >
-            <FontAwesomeIcon icon={faBrain} />
-          </button>
-        </div>
-        <div className="tooltip tooltip-bottom" data-tip={t('action.clear')}>
-          <button
-            onClick={onClearHistory}
-            className="btn btn-sm btn-outline"
-            disabled={isProcessing}
-          >
-            <FontAwesomeIcon icon={faTrash} />
-          </button>
-        </div>
+      <div style={{ display: 'flex', gap: 2 }}>
+        <IconButton icon="BrainCircuit" size="sm" title="Reflect & learn" onClick={onReflectAndLearn} />
+        <IconButton icon="Trash2" size="sm" title="Clear output" onClick={onClearHistory} />
       </div>
     </div>
   );

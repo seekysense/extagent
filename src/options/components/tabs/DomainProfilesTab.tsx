@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLang } from '../../../i18n';
 import { DomainProfile, DomainProfileManager } from '../../../agent/domainProfileManager';
+import { Section } from '../Section';
+import { Button, Toggle } from '../../../ui';
+import { LucideIcon } from '../../../ui';
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -14,6 +17,19 @@ const EMPTY_PROFILE: Omit<DomainProfile, 'id'> = {
   enabled: true,
 };
 
+const miniTextarea: React.CSSProperties = {
+  width: '100%', minHeight: 70, padding: 10, border: '1px solid var(--border)',
+  borderRadius: 6, outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+  fontFamily: 'inherit', fontSize: 12, lineHeight: 1.5,
+  background: 'var(--surface-2)', color: 'var(--text)',
+};
+
+const FieldLabel = ({ children }: { children: React.ReactNode }) => (
+  <div style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+    {children}
+  </div>
+);
+
 export function DomainProfilesTab() {
   const { t } = useLang();
   const [profiles, setProfiles] = useState<DomainProfile[]>([]);
@@ -21,6 +37,7 @@ export function DomainProfilesTab() {
   const [draft, setDraft] = useState<DomainProfile | null>(null);
   const [jsonError, setJsonError] = useState('');
   const [schemaText, setSchemaText] = useState('');
+  const [openAccordion, setOpenAccordion] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
@@ -32,39 +49,26 @@ export function DomainProfilesTab() {
 
   const openNew = () => {
     const p: DomainProfile = { id: generateId(), ...EMPTY_PROFILE };
-    setDraft(p);
-    setSchemaText('');
-    setJsonError('');
-    setEditingId('__new__');
+    setDraft(p); setSchemaText(''); setJsonError(''); setEditingId('__new__');
   };
 
   const openEdit = (profile: DomainProfile) => {
     setDraft({ ...profile });
     setSchemaText(profile.default_schema ? JSON.stringify(profile.default_schema, null, 2) : '');
-    setJsonError('');
-    setEditingId(profile.id);
+    setJsonError(''); setEditingId(profile.id);
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setDraft(null);
-    setJsonError('');
-  };
+  const cancelEdit = () => { setEditingId(null); setDraft(null); setJsonError(''); };
 
   const handleSave = async () => {
     if (!draft) return;
     let default_schema: object | undefined = undefined;
     if (schemaText.trim()) {
-      try {
-        default_schema = JSON.parse(schemaText);
-      } catch {
-        setJsonError(t('profile.invalidJson'));
-        return;
-      }
+      try { default_schema = JSON.parse(schemaText); }
+      catch { setJsonError(t('profile.invalidJson')); return; }
     }
     await DomainProfileManager.getInstance().saveProfile({ ...draft, default_schema });
-    cancelEdit();
-    await load();
+    cancelEdit(); await load();
   };
 
   const handleDelete = async (id: string) => {
@@ -81,10 +85,7 @@ export function DomainProfilesTab() {
     const list = await DomainProfileManager.getInstance().listProfiles();
     const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'domain-profiles.json';
-    a.click();
+    const a = document.createElement('a'); a.href = url; a.download = 'domain-profiles.json'; a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -95,111 +96,122 @@ export function DomainProfilesTab() {
     reader.onload = async (ev) => {
       try {
         const list = JSON.parse(ev.target?.result as string) as DomainProfile[];
-        if (!Array.isArray(list)) throw new Error('Expected array');
-        for (const p of list) {
-          await DomainProfileManager.getInstance().saveProfile(p);
-        }
+        if (!Array.isArray(list)) throw new Error();
+        for (const p of list) await DomainProfileManager.getInstance().saveProfile(p);
         await load();
-      } catch {
-        // silently ignore malformed imports
-      }
+      } catch { /* silently ignore */ }
     };
-    reader.readAsText(file);
-    e.target.value = '';
+    reader.readAsText(file); e.target.value = '';
   };
 
   const isEditing = (id: string) => editingId === id || (editingId === '__new__' && id === draft?.id);
 
   return (
-    <div className="max-w-2xl">
-      <h2 className="text-xl font-bold mb-4">{t('profile.title')}</h2>
-      <p className="text-sm text-gray-600 mb-4">{t('profile.desc')}</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <Section
+        title={t('profile.title')}
+        description={t('profile.desc')}
+        action={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button variant="outline" size="sm" icon="Download" onClick={handleExport} data-testid="btn-export-profiles">{t('profile.export')}</Button>
+            <Button variant="outline" size="sm" icon="Upload" onClick={() => fileInputRef.current?.click()} data-testid="btn-import-profiles">{t('profile.import')}</Button>
+            <Button size="sm" icon="Plus" onClick={openNew} data-testid="btn-new-profile">{t('profile.new')}</Button>
+            <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+          </div>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }} data-testid="profile-list">
+          {profiles.length === 0 && !isEditing('__new__') && (
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', padding: '16px 0' }} data-testid="profile-list-empty">
+              {t('profile.empty')}
+            </div>
+          )}
 
-      <div className="flex gap-2 mb-4">
-        <button className="btn btn-sm btn-primary" onClick={openNew} data-testid="btn-new-profile">
-          {t('profile.new')}
-        </button>
-        <button className="btn btn-sm btn-outline" onClick={handleExport} data-testid="btn-export-profiles">
-          {t('profile.export')}
-        </button>
-        <button
-          className="btn btn-sm btn-outline"
-          onClick={() => fileInputRef.current?.click()}
-          data-testid="btn-import-profiles"
-        >
-          {t('profile.import')}
-        </button>
-        <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
-      </div>
+          {profiles.map((profile) => (
+            <div key={profile.id} className="ia-card" style={{ overflow: 'hidden' }} data-testid={`profile-item-${profile.id}`}>
+              {isEditing(profile.id) && draft ? (
+                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="profile-editor">
+                  <ProfileEditorForm
+                    draft={draft} schemaText={schemaText} jsonError={jsonError}
+                    onChange={setDraft} onSchemaChange={setSchemaText}
+                    onSave={handleSave} onCancel={cancelEdit} t={t}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => setOpenAccordion(openAccordion === profile.id ? null : profile.id)}
+                  style={{
+                    width: '100%', padding: 14, border: 0, background: 'transparent',
+                    cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 12,
+                  }}
+                >
+                  <div style={{
+                    width: 38, height: 38, borderRadius: 9, flex: '0 0 auto',
+                    background: 'var(--surface-2)', color: 'var(--text-muted)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <LucideIcon name="Globe" size={17} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{profile.display_name}</span>
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)',
+                        background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 4,
+                      }}>{profile.domain_pattern}</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {profile.hints ? `${profile.hints.split('\n').filter(Boolean).length} hint selettori` : '0 hint'}
+                    </div>
+                  </div>
+                  <LucideIcon name={openAccordion === profile.id ? 'ChevronUp' : 'ChevronDown'} size={14} color="var(--text-muted)" />
+                </button>
+              )}
 
-      <div className="flex flex-col gap-2" data-testid="profile-list">
-        {profiles.length === 0 && !isEditing('__new__') && (
-          <p className="text-sm text-gray-500" data-testid="profile-list-empty">{t('profile.empty')}</p>
-        )}
+              {openAccordion === profile.id && !isEditing(profile.id) && (
+                <div className="ia-expand-in" style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div><FieldLabel>Addendum prompt</FieldLabel>
+                    <textarea style={miniTextarea} value={profile.system_prompt_addendum ?? ''} readOnly />
+                  </div>
+                  <div><FieldLabel>Hint selettori CSS</FieldLabel>
+                    <textarea style={{ ...miniTextarea, fontFamily: 'var(--font-mono)' }} value={profile.hints ?? ''} readOnly />
+                  </div>
+                  {profile.default_schema && (
+                    <div><FieldLabel>Schema JSON di default</FieldLabel>
+                      <textarea style={{ ...miniTextarea, fontFamily: 'var(--font-mono)', background: 'var(--code-bg)', color: 'var(--code-fg)', borderColor: 'transparent' }}
+                        value={JSON.stringify(profile.default_schema, null, 2)} readOnly />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <Toggle checked={profile.enabled} onChange={() => handleToggle(profile)} label={profile.enabled ? 'Abilitato' : 'Disabilitato'} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <Button variant="ghost" size="sm" icon="Trash2" danger onClick={() => handleDelete(profile.id)} data-testid={`btn-delete-profile-${profile.id}`}>Elimina</Button>
+                      <Button size="sm" icon="Pencil" onClick={() => openEdit(profile)} data-testid={`btn-edit-profile-${profile.id}`}>Modifica</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
 
-        {profiles.map(profile => (
-          <div key={profile.id} className="card bg-base-100 shadow p-3" data-testid={`profile-item-${profile.id}`}>
-            {isEditing(profile.id) && draft ? (
-              <ProfileEditor
-                draft={draft}
-                schemaText={schemaText}
-                jsonError={jsonError}
-                onChange={setDraft}
-                onSchemaChange={setSchemaText}
-                onSave={handleSave}
-                onCancel={cancelEdit}
-                t={t}
+          {editingId === '__new__' && draft && (
+            <div className="ia-card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="profile-editor-new">
+              <ProfileEditorForm
+                draft={draft} schemaText={schemaText} jsonError={jsonError}
+                onChange={setDraft} onSchemaChange={setSchemaText}
+                onSave={handleSave} onCancel={cancelEdit} t={t}
               />
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm toggle-primary"
-                  checked={profile.enabled}
-                  onChange={() => handleToggle(profile)}
-                  data-testid={`toggle-profile-${profile.id}`}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{profile.display_name}</p>
-                  <p className="text-xs text-gray-400 font-mono truncate">{profile.domain_pattern}</p>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    className="btn btn-xs btn-ghost"
-                    onClick={() => openEdit(profile)}
-                    data-testid={`btn-edit-profile-${profile.id}`}
-                  >✏️</button>
-                  <button
-                    className="btn btn-xs btn-ghost text-error"
-                    onClick={() => handleDelete(profile.id)}
-                    data-testid={`btn-delete-profile-${profile.id}`}
-                  >🗑</button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {editingId === '__new__' && draft && (
-          <div className="card bg-base-100 shadow p-3" data-testid="profile-editor-new">
-            <ProfileEditor
-              draft={draft}
-              schemaText={schemaText}
-              jsonError={jsonError}
-              onChange={setDraft}
-              onSchemaChange={setSchemaText}
-              onSave={handleSave}
-              onCancel={cancelEdit}
-              t={t}
-            />
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
+      </Section>
     </div>
   );
 }
 
-interface EditorProps {
+interface EditorFormProps {
   draft: DomainProfile;
   schemaText: string;
   jsonError: string;
@@ -210,75 +222,47 @@ interface EditorProps {
   t: (key: string) => string;
 }
 
-function ProfileEditor({ draft, schemaText, jsonError, onChange, onSchemaChange, onSave, onCancel, t }: EditorProps) {
+function ProfileEditorForm({ draft, schemaText, jsonError, onChange, onSchemaChange, onSave, onCancel, t }: EditorFormProps) {
   return (
-    <div className="flex flex-col gap-3" data-testid="profile-editor">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="profile-editor">
       <div>
-        <label className="label label-text text-xs">{t('profile.editorName')}</label>
-        <input
-          className="input input-sm w-full"
-          value={draft.display_name}
-          onChange={e => onChange({ ...draft, display_name: e.target.value })}
-          placeholder={t('profile.namePlaceholder')}
-          data-testid="profile-editor-name"
+        <FieldLabel>{t('profile.editorName')}</FieldLabel>
+        <input value={draft.display_name} onChange={(e) => onChange({ ...draft, display_name: e.target.value })}
+          placeholder={t('profile.namePlaceholder')} data-testid="profile-editor-name"
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, outline: 'none', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'inherit', fontSize: 12.5, boxSizing: 'border-box' }}
         />
       </div>
       <div>
-        <label className="label label-text text-xs">{t('profile.editorPattern')}</label>
-        <input
-          className="input input-sm w-full font-mono"
-          value={draft.domain_pattern}
-          onChange={e => onChange({ ...draft, domain_pattern: e.target.value })}
-          placeholder={t('profile.patternPlaceholder')}
-          data-testid="profile-editor-pattern"
+        <FieldLabel>{t('profile.editorPattern')}</FieldLabel>
+        <input value={draft.domain_pattern} onChange={(e) => onChange({ ...draft, domain_pattern: e.target.value })}
+          placeholder={t('profile.patternPlaceholder')} data-testid="profile-editor-pattern"
+          style={{ width: '100%', padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 6, outline: 'none', background: 'var(--surface)', color: 'var(--text)', fontFamily: 'var(--font-mono)', fontSize: 12, boxSizing: 'border-box' }}
         />
       </div>
       <div>
-        <label className="label label-text text-xs">{t('profile.editorAddendum')}</label>
-        <textarea
-          className="textarea textarea-sm w-full text-xs"
-          rows={4}
-          value={draft.system_prompt_addendum ?? ''}
-          onChange={e => onChange({ ...draft, system_prompt_addendum: e.target.value })}
-          placeholder={t('profile.addendumPlaceholder')}
-          data-testid="profile-editor-addendum"
-        />
+        <FieldLabel>{t('profile.editorAddendum')}</FieldLabel>
+        <textarea style={miniTextarea} value={draft.system_prompt_addendum ?? ''}
+          onChange={(e) => onChange({ ...draft, system_prompt_addendum: e.target.value })}
+          placeholder={t('profile.addendumPlaceholder')} data-testid="profile-editor-addendum" />
       </div>
       <div>
-        <label className="label label-text text-xs">{t('profile.editorHints')}</label>
-        <textarea
-          className="textarea textarea-sm w-full text-xs"
-          rows={2}
-          value={draft.hints ?? ''}
-          onChange={e => onChange({ ...draft, hints: e.target.value })}
-          placeholder={t('profile.hintsPlaceholder')}
-          data-testid="profile-editor-hints"
-        />
+        <FieldLabel>{t('profile.editorHints')}</FieldLabel>
+        <textarea style={{ ...miniTextarea, fontFamily: 'var(--font-mono)' }} value={draft.hints ?? ''}
+          onChange={(e) => onChange({ ...draft, hints: e.target.value })}
+          placeholder={t('profile.hintsPlaceholder')} data-testid="profile-editor-hints" />
       </div>
       <div>
-        <label className="label label-text text-xs">{t('profile.editorSchema')}</label>
-        <textarea
-          className="textarea textarea-sm w-full font-mono text-xs"
-          rows={4}
-          value={schemaText}
-          onChange={e => onSchemaChange(e.target.value)}
-          placeholder='{"type":"object","properties":{}}'
-          data-testid="profile-editor-schema"
-        />
-        {jsonError && <p className="text-xs text-error mt-1">{jsonError}</p>}
+        <FieldLabel>{t('profile.editorSchema')}</FieldLabel>
+        <textarea style={{ ...miniTextarea, fontFamily: 'var(--font-mono)', background: 'var(--code-bg)', color: 'var(--code-fg)', borderColor: 'transparent' }}
+          value={schemaText} onChange={(e) => onSchemaChange(e.target.value)}
+          placeholder='{"type":"object","properties":{}}' data-testid="profile-editor-schema" />
+        {jsonError && <div style={{ fontSize: 11.5, color: 'var(--error)', marginTop: 4 }}>{jsonError}</div>}
       </div>
-      <div className="flex gap-2">
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={onSave}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Button variant="ghost" size="sm" onClick={onCancel} data-testid="btn-cancel-profile">{t('profile.cancel')}</Button>
+        <Button size="sm" icon="Save" onClick={onSave}
           disabled={!draft.display_name.trim() || !draft.domain_pattern.trim()}
-          data-testid="btn-save-profile"
-        >
-          {t('profile.save')}
-        </button>
-        <button className="btn btn-sm btn-ghost" onClick={onCancel} data-testid="btn-cancel-profile">
-          {t('profile.cancel')}
-        </button>
+          data-testid="btn-save-profile">{t('profile.save')}</Button>
       </div>
     </div>
   );

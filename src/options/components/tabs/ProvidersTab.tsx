@@ -1,7 +1,4 @@
-import React from 'react';
 import { FunctionMapping, ModelProfile } from '../../../models/providers/types';
-import { useLang } from '../../../i18n';
-import { ProviderSelector } from '../ProviderSelector';
 import { ProviderSettings } from '../ProviderSettings';
 import { SaveButton } from '../SaveButton';
 
@@ -40,39 +37,29 @@ export function ProvidersTab({
   saveStatus,
   handleSave,
 }: ProvidersTabProps) {
-  const { t } = useLang();
-
   return (
-    <div className="space-y-6">
-      <div className="card bg-base-100 shadow-md">
-        <div className="card-body">
-          <h2 className="card-title text-xl">{t('llm.title')}</h2>
-          <p className="mb-4">{t('llm.desc')}</p>
-
-          <ProviderSelector />
-
-          <ProviderSettings
-            openaiCompatibleApiKey={openaiCompatibleApiKey}
-            setOpenaiCompatibleApiKey={setOpenaiCompatibleApiKey}
-            openaiCompatibleBaseUrl={openaiCompatibleBaseUrl}
-            setOpenaiCompatibleBaseUrl={setOpenaiCompatibleBaseUrl}
-            openaiCompatibleModelId={openaiCompatibleModelId}
-            setOpenaiCompatibleModelId={setOpenaiCompatibleModelId}
-            profiles={profiles}
-            setProfiles={setProfiles}
-            defaultProfileId={defaultProfileId}
-            setDefaultProfileId={setDefaultProfileId}
-            functionMappings={functionMappings}
-            setFunctionMappings={setFunctionMappings}
-          />
-
-          <SaveButton
-            isSaving={isSaving}
-            saveStatus={saveStatus}
-            handleSave={handleSave}
-            isDisabled={false}
-          />
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <ProviderSettings
+        openaiCompatibleApiKey={openaiCompatibleApiKey}
+        setOpenaiCompatibleApiKey={setOpenaiCompatibleApiKey}
+        openaiCompatibleBaseUrl={openaiCompatibleBaseUrl}
+        setOpenaiCompatibleBaseUrl={setOpenaiCompatibleBaseUrl}
+        openaiCompatibleModelId={openaiCompatibleModelId}
+        setOpenaiCompatibleModelId={setOpenaiCompatibleModelId}
+        profiles={profiles}
+        setProfiles={setProfiles}
+        defaultProfileId={defaultProfileId}
+        setDefaultProfileId={setDefaultProfileId}
+        functionMappings={functionMappings}
+        setFunctionMappings={setFunctionMappings}
+      />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', position: 'sticky', bottom: 0, paddingTop: 8 }}>
+        <SaveButton
+          isSaving={isSaving}
+          saveStatus={saveStatus}
+          handleSave={handleSave}
+          isDisabled={false}
+        />
       </div>
     </div>
   );

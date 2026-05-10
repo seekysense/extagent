@@ -1,2 +1,11 @@
 @import "tailwindcss";
 @plugin "daisyui";
+@import "./styles/tokens.css";
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
